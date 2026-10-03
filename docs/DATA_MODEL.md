@@ -240,4 +240,28 @@ UserMediaProgress (Base)
 - *Constraints*: `UniqueConstraint(fields=['provider', 'external_id'])` — guarantees one-to-one mapping per provider ID.
 - *Cross-Provider Deduplication*: Multiple mappings (e.g. AniList and Jikan) can point to the same `MediaItem` via `MediaMatcherService` confidence matching.
 
+---
+
+## 7. Metadata Ownership Boundaries & Invariants [APPROVED]
+
+### Architectural Ownership Matrix
+To guarantee user data immutability and predictable catalog synchronization, DreamTeal strictly delineates field ownership:
+
+| Tier | Controlled Models / Fields | Synchronization Behavior (`force_refresh=True`) | User Modification Rules |
+| :--- | :--- | :--- | :--- |
+| **Provider-Owned Catalog** | `MediaItem.title`, `synopsis`, `release_year`, `poster_image_url`, `backdrop_image_url`, `genres`, `tags`, detail extensions (`MovieDetail`, `SeriesDetail`, `MangaDetail`, `GameDetail`), `ExternalMediaMapping` | Updated directly from incoming provider payload. Provider-supplied genres and tags are reconciled. | Read-only in regular client workflows; curated via administrative or catalog provider imports. |
+| **DreamTeal Platform Catalog** | `MediaItem.slug`, `media_type`, `created_at`, `updated_at` | Immutable once created. Preserves permanent URL slug routes and canonical media type. | Managed internally by Django lifecycle. |
+| **User-Owned Tracking & Engagement** | `UserMediaStatus`, `UserMediaProgress`, `SeriesProgress`, `MangaProgress`, `GameProgress`, `DiaryLog`, `MediaReview`, `Collection`, `CollectionItem` | **STRICTLY IMMUTABLE** to provider ingestion. Provider sync cannot modify, overwrite, or delete any user record. | Full CRUD by authenticated record owner with strict user-scoping and privacy controls. |
+
+### Game Diary Hours Aggregation Lifecycle
+1. **Source of Truth**: `DiaryLog` consumption entries are the transactional source of truth for session-based gameplay.
+2. **Aggregated Total**: `GameProgress.hours_played` aggregates cumulative investment across sessions.
+3. **Internal Sync Tracking**: The synced session duration is recorded in `progress_snapshot['_synced_hours']`.
+4. **Lifecycle Hooks**:
+   - **Creation**: When created with `sync_progress=True`, `session_hours` is atomically added to `GameProgress.hours_played`.
+   - **Editing**: When session hours are updated (e.g., 2.5h -> 5.0h), the difference (`+2.5h`) is applied atomically without double-counting.
+   - **Deletion**: When a synced session log is deleted, its synced hours are deducted from `GameProgress.hours_played` (floored at 0.0).
+   - **Sync Suppression (`sync_progress=False`)**: When a log is saved with `sync_progress=False`, hours are recorded as unsynced (`_synced_hours = '0.0'`) and do not alter `GameProgress` on creation, update, or deletion.
+
+
 

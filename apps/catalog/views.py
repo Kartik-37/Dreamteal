@@ -101,13 +101,15 @@ class MediaImportView(APIView):
         external_id = data['external_id']
         media_type = data.get('media_type') or None
         force_refresh = data.get('force_refresh', False)
+        title_hint = data.get('title_hint') or None
 
         try:
             media_item, created = registry.import_media(
                 provider_key=provider_key,
                 external_id=external_id,
                 media_type=media_type,
-                force_refresh=force_refresh
+                force_refresh=force_refresh,
+                title_hint=title_hint
             )
             # Full detail representation
             detail_serializer = MediaItemDetailSerializer(media_item)

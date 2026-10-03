@@ -45,6 +45,7 @@ class NormalizedSearchResult:
     is_imported: bool = False
     slug: Optional[str] = None
     external_url: str = ''
+    subtype: Optional[str] = None  # Subtype indicator: 'MANGA', 'MANHWA', 'MANHUA', 'WEBTOON'
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -52,6 +53,7 @@ class NormalizedSearchResult:
             'external_id': self.external_id,
             'title': self.title,
             'media_type': self.media_type,
+            'subtype': self.subtype,
             'release_year': self.release_year,
             'poster_url': self.poster_url,
             'backdrop_url': self.backdrop_url,

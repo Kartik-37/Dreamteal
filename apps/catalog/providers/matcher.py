@@ -16,6 +16,7 @@ STRICT MATCHING PRINCIPLES:
 4. Score threshold (>= 75.0 / 100) must be satisfied; otherwise items remain separate.
 """
 
+import difflib
 import logging
 import re
 from typing import List, Optional, Tuple
@@ -35,6 +36,15 @@ class MediaMatcherService:
             return ''
         cleaned = re.sub(r'[^\w\s]', '', text.lower())
         return ' '.join(cleaned.split())
+
+    @staticmethod
+    def calculate_string_similarity(s1: str, s2: str) -> float:
+        """Returns string similarity between 0.0 and 100.0 using difflib.SequenceMatcher."""
+        if not s1 or not s2:
+            return 0.0
+        if s1 == s2:
+            return 100.0
+        return difflib.SequenceMatcher(None, s1, s2).ratio() * 100.0
 
     @classmethod
     def find_match(cls, candidate: NormalizedMediaDetail) -> Tuple[Optional[MediaItem], float]:

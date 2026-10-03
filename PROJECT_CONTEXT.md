@@ -57,3 +57,14 @@ Answers *"What should I watch/read/play next?"* directly on the platform using a
 
 ### 6. Code Quality & Readability
 All backend Django apps and React components include clear inline comments explaining what each module does, field definitions, business logic, and API data flow for developer readability.
+
+### 7. Canonical Provider Identity & Metadata Ownership [APPROVED]
+- All legacy direct provider ID fields (`tmdb_id`, `mal_id`, `rawg_id`) are completely removed from `MediaItem`. Third-party identity lives exclusively in `ExternalProvider` and `ExternalMediaMapping`.
+- Clear metadata ownership boundary: Provider-owned catalog metadata (title, synopsis, release year, posters, backdrops, genres, tags, detail models) are refreshed on `force_refresh=True` with reconciled taxonomy. User-owned tracking, progress, diary logs, reviews, and collections are strictly immutable to external provider sync.
+- Manga vs Manhwa: Single local type `MANGA` with `MangaDetail.manga_type` distinguishing `MANGA`, `MANHWA`, `MANHUA`, and `WEBTOON`. AniList and Jikan adapters pass subtype filters (`countryOfOrigin: KR` / `type=manhwa`) to retrieve authentic Manhwa.
+
+### 8. Environment Security & Game Playtime Invariants [APPROVED]
+- Real `.env` loading via `python-dotenv`. Hard-coded fallback secrets are banned; production startup without `SECRET_KEY` fails immediately with `ImproperlyConfigured`.
+- Game diary sessions are the transactional source of truth for playtime. `GameProgress.hours_played` is maintained consistently across session creation, edit (delta calculation), deletion (deducting synced hours), and is unaffected when `sync_progress=False`.
+- Private reviews (`is_public=False`) are visible only to their owner (`404 Not Found` for anonymous and non-owning authenticated users).
+

@@ -64,3 +64,19 @@ To prevent hardcoded choices in model columns and preserve database flexibility,
   - Never mutates historical diary log entries.
 - **Deletion (`DELETE /api/v1/reviews/<id>/`)**:
   - Removes the review without affecting the user's historical diary logs or catalog items.
+
+---
+
+## 5. Review Privacy & Ownership Access Control [APPROVED]
+
+To preserve user privacy and data security:
+- **Private Reviews (`is_public=False`)**:
+  - Strictly visible **only** to the owning user.
+  - Anonymous users requesting a private review receive `404 Not Found`.
+  - Authenticated users who do not own the private review receive `404 Not Found`.
+  - The owning user receives `200 OK`.
+- **Public Reviews (`is_public=True`)**:
+  - Visible to all users (anonymous and authenticated) via `200 OK`.
+- **Mutations (PATCH, PUT, DELETE)**:
+  - Scoped strictly to the owning user. Non-owners cannot alter or delete any review.
+

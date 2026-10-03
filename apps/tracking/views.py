@@ -70,10 +70,13 @@ class UserMediaStatusDetailView(generics.RetrieveUpdateDestroyAPIView):
     GET /api/v1/tracking/status/<id>/
     PATCH /api/v1/tracking/status/<id>/
     DELETE /api/v1/tracking/status/<id>/
+    Strictly scoped to the authenticated user.
     """
     serializer_class = UserMediaStatusSerializer
     permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly]
-    queryset = UserMediaStatus.objects.all()
+
+    def get_queryset(self):
+        return UserMediaStatus.objects.filter(user=self.request.user)
 
 
 class UserMediaProgressListCreateView(generics.ListCreateAPIView):
@@ -115,10 +118,15 @@ class UserMediaProgressDetailView(generics.RetrieveUpdateAPIView):
     """
     GET /api/v1/tracking/progress/<id>/
     PATCH /api/v1/tracking/progress/<id>/
+    Strictly scoped to the authenticated user.
     """
     serializer_class = UserMediaProgressSerializer
     permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly]
-    queryset = UserMediaProgress.objects.all()
+
+    def get_queryset(self):
+        return UserMediaProgress.objects.filter(user=self.request.user).select_related(
+            'series_progress', 'manga_progress', 'game_progress'
+        )
 
 
 class DiaryLogListCreateView(generics.ListCreateAPIView):
@@ -163,7 +171,10 @@ class DiaryLogDetailView(generics.RetrieveUpdateDestroyAPIView):
     PATCH /api/v1/tracking/logs/<id>/
     DELETE /api/v1/tracking/logs/<id>/
     Controlled editing of a specific historical diary record without affecting others.
+    Strictly scoped to the authenticated user.
     """
     serializer_class = DiaryLogSerializer
     permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly]
-    queryset = DiaryLog.objects.all()
+
+    def get_queryset(self):
+        return DiaryLog.objects.filter(user=self.request.user).select_related('media_item')

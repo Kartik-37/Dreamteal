@@ -60,33 +60,44 @@ class AniListProvider(BaseMetadataProvider):
             logger.error("AniList GraphQL request failed: %s", str(e))
             return None
 
-    def search(self, query: str, limit: int = 20) -> List[NormalizedSearchResult]:
+    def search(self, query: str, limit: int = 20, subtype: Optional[str] = None) -> List[NormalizedSearchResult]:
         if not query.strip():
             return []
 
-        gql_query = """
-        query ($search: String, $perPage: Int) {
-          Page(page: 1, perPage: $perPage) {
-            media(search: $search, type: MANGA, sort: SEARCH_MATCH) {
+        country_var_decl = ", $country: CountryCode" if subtype in ['MANGA', 'MANHWA', 'MANHUA'] else ""
+        country_filter = ", countryOfOrigin: $country" if subtype in ['MANGA', 'MANHWA', 'MANHUA'] else ""
+
+        gql_query = f"""
+        query ($search: String, $perPage: Int{country_var_decl}) {{
+          Page(page: 1, perPage: $perPage) {{
+            media(search: $search, type: MANGA{country_filter}, sort: SEARCH_MATCH) {{
               id
-              title {
+              title {{
                 romaji
                 english
                 native
-              }
+              }}
               countryOfOrigin
               format
               status
-              startDate { year }
-              coverImage { large }
+              startDate {{ year }}
+              coverImage {{ large }}
               bannerImage
               description(asHtml: false)
               genres
-            }
-          }
-        }
+            }}
+          }}
+        }}
         """
-        data = self._post_graphql(gql_query, {'search': query, 'perPage': limit})
+        vars_payload: Dict[str, Any] = {'search': query, 'perPage': limit}
+        if subtype == 'MANHWA':
+            vars_payload['country'] = 'KR'
+        elif subtype == 'MANGA':
+            vars_payload['country'] = 'JP'
+        elif subtype == 'MANHUA':
+            vars_payload['country'] = 'CN'
+
+        data = self._post_graphql(gql_query, vars_payload)
         if not data:
             return []
 
@@ -109,11 +120,20 @@ class AniListProvider(BaseMetadataProvider):
         banner = item.get('bannerImage', '')
         year = item.get('startDate', {}).get('year')
 
+        country = item.get('countryOfOrigin', 'JP')
+        if country == 'KR':
+            subtype = 'MANHWA'
+        elif country == 'CN':
+            subtype = 'MANHUA'
+        else:
+            subtype = 'MANGA'
+
         return NormalizedSearchResult(
             provider=self.provider_key,
             external_id=ext_id,
             title=chosen_title,
             media_type='MANGA',
+            subtype=subtype,
             release_year=year,
             poster_url=cover or '',
             backdrop_url=banner or '',
@@ -243,11 +263,18 @@ class AniListProvider(BaseMetadataProvider):
             total_chapters=media.get('chapters')
         )
 
-    def _fetch_page(self, sort_enum: str, extra_filter: str = '', limit: int = 20) -> List[NormalizedSearchResult]:
+    def _fetch_page(self, sort_enum: str, extra_filter: str = '', limit: int = 20, media_type: str = 'MANGA') -> List[NormalizedSearchResult]:
+        country_filter = ''
+        if media_type.upper() == 'MANHWA':
+            country_filter = ', countryOfOrigin: KR'
+        elif media_type.upper() == 'MANGA':
+            country_filter = ', countryOfOrigin: JP'
+
+        combined_filter = f"{extra_filter}{country_filter}"
         gql_query = f"""
         query ($perPage: Int) {{
           Page(page: 1, perPage: $perPage) {{
-            media(type: MANGA, sort: [{sort_enum}] {extra_filter}) {{
+            media(type: MANGA, sort: [{sort_enum}] {combined_filter}) {{
               id
               title {{
                 romaji
@@ -275,13 +302,13 @@ class AniListProvider(BaseMetadataProvider):
         return results
 
     def discover_popular(self, media_type: str = 'MANGA', limit: int = 20) -> List[NormalizedSearchResult]:
-        return self._fetch_page('POPULARITY_DESC', limit=limit)
+        return self._fetch_page('POPULARITY_DESC', limit=limit, media_type=media_type)
 
     def discover_trending(self, media_type: str = 'MANGA', limit: int = 20) -> List[NormalizedSearchResult]:
-        return self._fetch_page('TRENDING_DESC', limit=limit)
+        return self._fetch_page('TRENDING_DESC', limit=limit, media_type=media_type)
 
     def discover_latest(self, media_type: str = 'MANGA', limit: int = 20) -> List[NormalizedSearchResult]:
-        return self._fetch_page('START_DATE_DESC', limit=limit)
+        return self._fetch_page('START_DATE_DESC', limit=limit, media_type=media_type)
 
     def discover_upcoming(self, media_type: str = 'MANGA', limit: int = 20) -> List[NormalizedSearchResult]:
-        return self._fetch_page('POPULARITY_DESC', extra_filter=', status: NOT_YET_RELEASED', limit=limit)
+        return self._fetch_page('POPULARITY_DESC', extra_filter=', status: NOT_YET_RELEASED', limit=limit, media_type=media_type)

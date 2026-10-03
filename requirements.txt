@@ -12,3 +12,6 @@ django-cors-headers==4.9.0
 
 # HTTP Client for Third-Party Metadata Providers
 requests==2.32.3
+
+# Environment Variable Management (.env support)
+python-dotenv==1.0.1

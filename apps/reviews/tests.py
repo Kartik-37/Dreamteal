@@ -211,3 +211,53 @@ class ReviewsAPITestCase(TestCase):
         res_delete = self.client.delete(f'/api/v1/reviews/{review_id}/')
         self.assertEqual(res_delete.status_code, 204)
 
+    def test_private_review_privacy_access_control(self):
+        """
+        Verifies strict review privacy:
+        - Anonymous user + private review -> 404
+        - Other authenticated user + private review -> 404
+        - Owner + private review -> 200
+        - Any user + public review -> 200
+        - Other user cannot PATCH or DELETE private review
+        """
+        # User A creates a private review
+        private_review = MediaReview.objects.create(
+            user=self.user,
+            media_item=self.movie,
+            reaction=self.rx_peak,
+            review_text="My private personal journal thoughts.",
+            is_public=False
+        )
+
+        # 1. Anonymous GET -> 404
+        anon_client = APIClient()
+        res_anon = anon_client.get(f'/api/v1/reviews/{private_review.id}/')
+        self.assertEqual(res_anon.status_code, 404)
+
+        # 2. Other user GET -> 404
+        user_b = User.objects.create_user(username='other_user', password='pass123_secure')
+        other_client = APIClient()
+        other_client.force_authenticate(user=user_b)
+        res_other = other_client.get(f'/api/v1/reviews/{private_review.id}/')
+        self.assertEqual(res_other.status_code, 404)
+
+        # 3. Owner GET -> 200
+        res_owner = self.client.get(f'/api/v1/reviews/{private_review.id}/')
+        self.assertEqual(res_owner.status_code, 200)
+        self.assertEqual(res_owner.data['review_text'], "My private personal journal thoughts.")
+
+        # 4. Other user cannot PATCH or DELETE private review -> 404
+        res_other_patch = other_client.patch(f'/api/v1/reviews/{private_review.id}/', {'review_text': 'Hacked'})
+        self.assertEqual(res_other_patch.status_code, 404)
+        res_other_delete = other_client.delete(f'/api/v1/reviews/{private_review.id}/')
+        self.assertEqual(res_other_delete.status_code, 404)
+
+        # 5. Public review is readable by all
+        private_review.is_public = True
+        private_review.save()
+
+        res_anon_pub = anon_client.get(f'/api/v1/reviews/{private_review.id}/')
+        self.assertEqual(res_anon_pub.status_code, 200)
+        res_other_pub = other_client.get(f'/api/v1/reviews/{private_review.id}/')
+        self.assertEqual(res_other_pub.status_code, 200)
+

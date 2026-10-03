@@ -365,12 +365,27 @@ class Command(BaseCommand):
         )
         ExternalMediaMapping.objects.update_or_create(
             provider=created_providers['rawg'],
-            external_id='3328',
+            external_id='41494',
             defaults={
                 'media_item': cyberpunk,
-                'external_url': 'https://rawg.io/games/the-witcher-3-wild-hunt',
+                'external_url': 'https://rawg.io/games/cyberpunk-2077',
             }
         )
+
+        # Seed validation routine: verify every seed provider mapping against the intended title
+        verified_seed_mappings = [
+            (batman, 'tmdb', '414906', 'the-batman'),
+            (severance, 'tmdb', '97546', 'severance'),
+            (solo_leveling, 'anilist', '105398', 'solo-leveling'),
+            (cyberpunk, 'rawg', '41494', 'cyberpunk-2077'),
+        ]
+        for item, prov_key, exp_id, expected_slug_part in verified_seed_mappings:
+            mapping = ExternalMediaMapping.objects.filter(media_item=item, provider__provider_key=prov_key).first()
+            if not mapping or mapping.external_id != exp_id or expected_slug_part not in mapping.external_url.lower():
+                raise ValueError(
+                    f"Seed mapping integrity validation failed: {item.title} mapped to unexpected provider record "
+                    f"(Provider: {prov_key}, ID: {mapping.external_id if mapping else 'None'}, URL: {mapping.external_url if mapping else 'None'})."
+                )
 
         # History-Preserving Diary Logs (Demonstrating initial log + rewatch)
         if not DiaryLog.objects.filter(user=test_user, media_item=batman, is_rewatch_or_replay=False).exists():

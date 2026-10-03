@@ -138,6 +138,7 @@ class MediaImportRequestSerializer(serializers.Serializer):
         allow_null=True
     )
     force_refresh = serializers.BooleanField(required=False, default=False)
+    title_hint = serializers.CharField(required=False, allow_blank=True, default='')
 
 
 class MediaSearchQuerySerializer(serializers.Serializer):

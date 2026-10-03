@@ -56,8 +56,14 @@ A diary entry must preserve historical consumption activity. Rather than being a
   - Historical diary entries must NEVER accidentally regress active progress.
   - Example: If current progress is Season 2 Episode 8, and the user enters a retrospective diary log for Season 2 Episode 4, the diary log is saved with Episode 4, but current progress remains at Episode 8.
   - Example: If current manga progress is Chapter 84, and the user logs a forgotten session for Chapter 70, current progress remains at 84.
-- **Game Completion Rules**:
-  - Logging hours always accumulates additively into `GameProgress.hours_played`.
+- **Game Hours Aggregation Lifecycle**:
+  - Diary sessions are the source of truth for session-based gameplay.
+  - `GameProgress.hours_played` is maintained consistently across all operations via transaction-safe model hooks:
+    - **Creation**: Session hours (`session_hours`) are atomically added to `GameProgress.hours_played`, and recorded in `progress_snapshot['_synced_hours']`.
+    - **Editing**: Modifying session hours (e.g. 2.5h -> 5.0h) computes the delta (`+2.5h`) and applies it cleanly without double-counting.
+    - **Deletion**: Deleting a session deducts its previously synced hours (`_synced_hours`) from `GameProgress.hours_played` (floored at `0.0`).
+    - **Multiple Sessions**: Accumulate additively and decrement independently upon individual deletion.
+    - **Opt-Out (`sync_progress=False`)**: When a log is saved with `sync_progress=False`, hours are recorded as unsynced (`_synced_hours = '0.0'`) and do not alter `GameProgress` on creation, update, or deletion.
   - If a diary log includes a game completion status (`Main Story`, `Main + Extra`, `100% Completionist`), `GameProgress.completion_type` is updated and `UserMediaStatus` can transition to `Finished`.
 - **Optional Opt-Out**: The logging UI modal and API request include an optional toggle/parameter (`sync_progress: false`) for edge cases where the user does not want active progress to be updated, but automatic synchronization (`sync_progress: true`) is the default.
 

@@ -38,14 +38,22 @@ class JikanProvider(BaseMetadataProvider):
     def get_external_url(self, external_id: str) -> str:
         return f"https://myanimelist.net/manga/{external_id}"
 
-    def search(self, query: str, limit: int = 20) -> List[NormalizedSearchResult]:
+    def search(self, query: str, limit: int = 20, subtype: Optional[str] = None) -> List[NormalizedSearchResult]:
         if not query.strip():
             return []
+
+        params: Dict[str, Any] = {'q': query, 'limit': min(limit, 25)}
+        if subtype == 'MANHWA':
+            params['type'] = 'manhwa'
+        elif subtype == 'MANGA':
+            params['type'] = 'manga'
+        elif subtype == 'MANHUA':
+            params['type'] = 'manhua'
 
         try:
             resp = requests.get(
                 f"{self.base_url}/manga",
-                params={'q': query, 'limit': min(limit, 25)},
+                params=params,
                 headers={'User-Agent': 'DreamTeal/1.0'},
                 timeout=self.timeout
             )
@@ -72,11 +80,20 @@ class JikanProvider(BaseMetadataProvider):
 
         genres = [g.get('name') for g in item.get('genres', []) if g.get('name')]
 
+        raw_type = (item.get('type') or '').upper()
+        if raw_type == 'MANHWA':
+            subtype = 'MANHWA'
+        elif raw_type == 'MANHUA':
+            subtype = 'MANHUA'
+        else:
+            subtype = 'MANGA'
+
         return NormalizedSearchResult(
             provider=self.provider_key,
             external_id=ext_id,
             title=title,
             media_type='MANGA',
+            subtype=subtype,
             release_year=release_year,
             poster_url=poster_url,
             synopsis=item.get('synopsis') or '',
@@ -189,23 +206,38 @@ class JikanProvider(BaseMetadataProvider):
             return []
 
     def discover_popular(self, media_type: str = 'MANGA', limit: int = 20) -> List[NormalizedSearchResult]:
+        params: Dict[str, Any] = {'filter': 'bypopularity', 'limit': min(limit, 25)}
+        if media_type.upper() == 'MANHWA':
+            params['type'] = 'manhwa'
+        elif media_type.upper() == 'MANGA':
+            params['type'] = 'manga'
         return self._fetch_endpoint(
             f"{self.base_url}/top/manga",
-            {'filter': 'bypopularity', 'limit': min(limit, 25)},
+            params,
             limit
         )
 
     def discover_latest(self, media_type: str = 'MANGA', limit: int = 20) -> List[NormalizedSearchResult]:
+        params: Dict[str, Any] = {'order_by': 'start_date', 'sort': 'desc', 'limit': min(limit, 25)}
+        if media_type.upper() == 'MANHWA':
+            params['type'] = 'manhwa'
+        elif media_type.upper() == 'MANGA':
+            params['type'] = 'manga'
         return self._fetch_endpoint(
             f"{self.base_url}/manga",
-            {'order_by': 'start_date', 'sort': 'desc', 'limit': min(limit, 25)},
+            params,
             limit
         )
 
     def discover_upcoming(self, media_type: str = 'MANGA', limit: int = 20) -> List[NormalizedSearchResult]:
+        params: Dict[str, Any] = {'filter': 'upcoming', 'limit': min(limit, 25)}
+        if media_type.upper() == 'MANHWA':
+            params['type'] = 'manhwa'
+        elif media_type.upper() == 'MANGA':
+            params['type'] = 'manga'
         return self._fetch_endpoint(
             f"{self.base_url}/top/manga",
-            {'filter': 'upcoming', 'limit': min(limit, 25)},
+            params,
             limit
         )
 

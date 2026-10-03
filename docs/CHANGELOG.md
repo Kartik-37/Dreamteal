@@ -4,6 +4,21 @@ All notable changes to the DreamTeal project specifications and codebase will be
 
 ---
 
+## [0.4.2-alpha] - 2026-10-03
+### Changed & Fixed (Phase 2 Final Correction Pass)
+- **Canonical Provider Identity**: Completely removed legacy provider fields (`tmdb_id`, `mal_id`, `rawg_id`) from `MediaItem`. All third-party identity is now stored exclusively in `ExternalProvider` and `ExternalMediaMapping` (Migration `0003`). Added regression test asserting no legacy provider ID fields exist on `MediaItem`.
+- **Automatic .env Loading & Secret Key Security**: Added `python-dotenv==1.0.1` to `requirements.txt` and integrated `load_dotenv()` into `dreamteal/settings.py`. Removed hardcoded `SECRET_KEY` fallback; when `DEBUG=False`, startup raises `ImproperlyConfigured` if `SECRET_KEY` is missing, empty, or insecure. Added validation for `ALLOWED_HOSTS`.
+- **True Manga vs Manhwa Discovery & Search**: Filtered AniList queries with `countryOfOrigin: "KR"` (for Manhwa) and `"JP"` (for Manga), and Jikan queries with `type: "manhwa"` / `"manga"`. Mapped external results to `NormalizedSearchResult.subtype` while preserving DreamTeal's single local `MediaItem.media_type = MANGA` and storing specific format in `MangaDetail.manga_type`.
+- **Provider Metadata Refresh & Taxonomy Reconciliation**: On `force_refresh=True`, provider-owned catalog metadata (title, synopsis, release year, poster/backdrop URLs, detail extensions) are updated with latest provider data. Provider taxonomy (`genres`, `tags`) is reconciled via set assignment without mutating user-owned data.
+- **Seed Data Provider Verification & Validation**: Corrected Cyberpunk 2077 RAWG external ID to `41494` (`cyberpunk-2077`). Added an automated seed verification step to `seed_catalog` ensuring mapped titles match expected provider records.
+- **AniList $\rightarrow$ Jikan Import Fallback**: Integrated `title_hint` into `registry.import_media()` and `fetch_details()`. When AniList details are unavailable, queries Jikan search using `title_hint`, scores candidate similarity using `MediaMatcherService`, and binds details if confidence $\ge 75.0\%$.
+- **Transaction-Safe Game Playtime Aggregation**: Made `DiaryLog` the transactional source of truth for session playtime. Accurately maintains `GameProgress.hours_played` on session creation, update (computing delta), deletion (deducting synced hours), and isolates sessions with `sync_progress=False`.
+- **Review Privacy & Scoped Querysets**: Enforced private review access controls (`404 Not Found` for anonymous or non-owning authenticated users). Scoped `UserMediaStatus`, `UserMediaProgress`, and `DiaryLog` detail and list views strictly to the authenticated user.
+- **Provider Active State Routing**: Added database-driven check `ProviderRegistry.is_provider_active(provider_key)` using `ExternalProvider.active` to avoid routing search, discovery, or imports to deactivated providers.
+- **Comprehensive Automated Tests**: Added 16 new automated tests bringing the total test suite to 72 tests passing with 100% offline mocks.
+
+---
+
 ## [0.4.1-alpha] - 2026-10-03
 ### Changed & Fixed (Phase 2 Correction Pass)
 - **Discovery Semantics Refinement**: Differentiated between `popular`, `latest`, `trending`, and `upcoming` feeds across TMDB, AniList, Jikan, and RAWG. Where providers lack native trending (Jikan, RAWG), documented transparent fallback to popular instead of fabricating scores.

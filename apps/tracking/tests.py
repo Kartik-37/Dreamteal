@@ -365,3 +365,164 @@ class TrackingAPITestCase(TestCase):
         res_delete = self.client.delete(f'/api/v1/tracking/logs/{log_id}/')
         self.assertEqual(res_delete.status_code, 204)
 
+
+class GameDiaryHoursLifecycleTestCase(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='gamer_lifecycle', password='pass123_secure')
+        self.game = MediaItem.objects.create(
+            media_type='GAME', title='Elden Ring', slug='elden-ring-2022', release_year=2022
+        )
+
+    def test_game_session_create_edit_delete_lifecycle(self):
+        """
+        Tests:
+        Create: 2.5h -> GameProgress.hours_played == 2.5
+        Edit: 2.5h -> 5.0h -> GameProgress.hours_played == 5.0
+        Delete: 5.0h session -> GameProgress.hours_played == 0.0
+        """
+        # 1. Create 2.5h session
+        log = DiaryLog.objects.create(
+            user=self.user,
+            media_item=self.game,
+            logged_date=timezone.now().date(),
+            progress_snapshot={'session_hours': 2.5}
+        )
+        prog = UserMediaProgress.objects.get(user=self.user, media_item=self.game)
+        self.assertEqual(prog.game_progress.hours_played, Decimal('2.5'))
+
+        # 2. Edit session to 5.0h
+        log.progress_snapshot = {'session_hours': 5.0}
+        log.save()
+        prog.game_progress.refresh_from_db()
+        self.assertEqual(prog.game_progress.hours_played, Decimal('5.0'))
+
+        # 3. Delete session
+        log.delete()
+        prog.game_progress.refresh_from_db()
+        self.assertEqual(prog.game_progress.hours_played, Decimal('0.0'))
+
+    def test_game_session_multiple_sessions_aggregation(self):
+        """
+        Tests multiple sessions accumulation, editing, and deletion without double counting:
+        Session A: 2.0h, Session B: 3.5h -> 5.5h
+        Edit A: 2.0h -> 4.0h -> 7.5h
+        Delete B: 3.5h -> 4.0h
+        Delete A: 4.0h -> 0.0h
+        """
+        log_a = DiaryLog.objects.create(
+            user=self.user,
+            media_item=self.game,
+            progress_snapshot={'session_hours': 2.0}
+        )
+        log_b = DiaryLog.objects.create(
+            user=self.user,
+            media_item=self.game,
+            progress_snapshot={'session_hours': 3.5}
+        )
+        prog = UserMediaProgress.objects.get(user=self.user, media_item=self.game)
+        self.assertEqual(prog.game_progress.hours_played, Decimal('5.5'))
+
+        # Edit session A from 2.0 to 4.0
+        log_a.progress_snapshot = {'session_hours': 4.0}
+        log_a.save()
+        prog.game_progress.refresh_from_db()
+        self.assertEqual(prog.game_progress.hours_played, Decimal('7.5'))
+
+        # Delete session B (3.5h)
+        log_b.delete()
+        prog.game_progress.refresh_from_db()
+        self.assertEqual(prog.game_progress.hours_played, Decimal('4.0'))
+
+        # Delete session A (4.0h)
+        log_a.delete()
+        prog.game_progress.refresh_from_db()
+        self.assertEqual(prog.game_progress.hours_played, Decimal('0.0'))
+
+    def test_historical_session_logging_aggregates_hours(self):
+        """Verifies logging a session with a historical date accumulates hours properly."""
+        DiaryLog.objects.create(
+            user=self.user,
+            media_item=self.game,
+            logged_date='2024-03-15',
+            progress_snapshot={'session_hours': 6.5}
+        )
+        prog = UserMediaProgress.objects.get(user=self.user, media_item=self.game)
+        self.assertEqual(prog.game_progress.hours_played, Decimal('6.5'))
+
+    def test_game_session_sync_progress_false_does_not_affect_hours(self):
+        """Verifies session with sync_progress=False does not accumulate or deduct hours on create/edit/delete."""
+        base = UserMediaProgress.objects.create(user=self.user, media_item=self.game)
+        gp = GameProgress.objects.create(progress=base, hours_played=Decimal('10.0'))
+
+        # Create session with sync_progress=False
+        log = DiaryLog.objects.create(
+            user=self.user,
+            media_item=self.game,
+            progress_snapshot={'session_hours': 8.0},
+            sync_progress=False
+        )
+        gp.refresh_from_db()
+        self.assertEqual(gp.hours_played, Decimal('10.0'))
+
+        # Edit session with sync_progress=False
+        log.progress_snapshot = {'session_hours': 12.0}
+        log.save(sync_progress=False)
+        gp.refresh_from_db()
+        self.assertEqual(gp.hours_played, Decimal('10.0'))
+
+        # Delete session
+        log.delete()
+        gp.refresh_from_db()
+        self.assertEqual(gp.hours_played, Decimal('10.0'))
+
+
+class TrackingPrivacyAndOwnershipTestCase(TestCase):
+    def setUp(self):
+        self.user_a = User.objects.create_user(username='user_alice', password='pass_alice_123')
+        self.user_b = User.objects.create_user(username='user_bob', password='pass_bob_123')
+
+        self.movie = MediaItem.objects.create(
+            media_type='MOVIE', title='Dune Part Two', slug='dune-part-two-2024', release_year=2024
+        )
+
+        # Alice creates status, progress, and diary log
+        self.alice_status = UserMediaStatus.objects.create(
+            user=self.user_a, media_item=self.movie, status=UserMediaStatus.StatusChoices.WATCHING
+        )
+        self.alice_progress = UserMediaProgress.objects.create(
+            user=self.user_a, media_item=self.movie
+        )
+        self.alice_log = DiaryLog.objects.create(
+            user=self.user_a, media_item=self.movie, session_notes='Alice private session notes'
+        )
+
+        self.client_b = APIClient()
+        self.client_b.force_authenticate(user=self.user_b)
+
+    def test_user_b_cannot_access_or_mutate_user_a_status(self):
+        res_get = self.client_b.get(f'/api/v1/tracking/status/{self.alice_status.id}/')
+        self.assertEqual(res_get.status_code, 404)
+
+        res_patch = self.client_b.patch(f'/api/v1/tracking/status/{self.alice_status.id}/', {'status': 'WATCHED'})
+        self.assertEqual(res_patch.status_code, 404)
+
+        res_delete = self.client_b.delete(f'/api/v1/tracking/status/{self.alice_status.id}/')
+        self.assertEqual(res_delete.status_code, 404)
+
+    def test_user_b_cannot_access_or_mutate_user_a_progress(self):
+        res_get = self.client_b.get(f'/api/v1/tracking/progress/{self.alice_progress.id}/')
+        self.assertEqual(res_get.status_code, 404)
+
+        res_patch = self.client_b.patch(f'/api/v1/tracking/progress/{self.alice_progress.id}/', {})
+        self.assertEqual(res_patch.status_code, 404)
+
+    def test_user_b_cannot_access_or_mutate_user_a_diary_log(self):
+        res_get = self.client_b.get(f'/api/v1/tracking/logs/{self.alice_log.id}/')
+        self.assertEqual(res_get.status_code, 404)
+
+        res_patch = self.client_b.patch(f'/api/v1/tracking/logs/{self.alice_log.id}/', {'session_notes': 'Bob tampering'})
+        self.assertEqual(res_patch.status_code, 404)
+
+        res_delete = self.client_b.delete(f'/api/v1/tracking/logs/{self.alice_log.id}/')
+        self.assertEqual(res_delete.status_code, 404)
+

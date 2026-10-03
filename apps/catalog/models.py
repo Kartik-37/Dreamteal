@@ -82,11 +82,6 @@ class MediaItem(models.Model):
     genres = models.ManyToManyField(Genre, blank=True, related_name='media_items')
     tags = models.ManyToManyField(Tag, blank=True, related_name='media_items')
 
-    # Optional third-party integration ingestion hooks
-    tmdb_id = models.CharField(max_length=50, blank=True, null=True, help_text="Optional TMDb ID")
-    mal_id = models.CharField(max_length=50, blank=True, null=True, help_text="Optional MyAnimeList ID")
-    rawg_id = models.CharField(max_length=50, blank=True, null=True, help_text="Optional RAWG Game ID")
-
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

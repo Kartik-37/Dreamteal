@@ -17,10 +17,15 @@ class ReviewMediaQuerySerializer(serializers.Serializer):
 
 
 class IsReviewOwnerOrReadOnly(permissions.BasePermission):
+    """
+    Enforces review privacy:
+    - Public reviews can be read by anyone (authenticated or anonymous).
+    - Private reviews can ONLY be read or modified by their creator.
+    """
     def has_object_permission(self, request, view, obj):
         if request.method in permissions.SAFE_METHODS:
-            return True
-        return obj.user == request.user
+            return obj.is_public or (request.user.is_authenticated and obj.user == request.user)
+        return request.user.is_authenticated and obj.user == request.user
 
 
 class ReactionDefinitionListView(generics.ListAPIView):
@@ -86,7 +91,14 @@ class MediaReviewDetailView(generics.RetrieveUpdateDestroyAPIView):
     GET /api/v1/reviews/<id>/
     PATCH /api/v1/reviews/<id>/
     DELETE /api/v1/reviews/<id>/
+    Strictly protects private review access: non-owners receive 404.
     """
     serializer_class = MediaReviewSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsReviewOwnerOrReadOnly]
-    queryset = MediaReview.objects.select_related('user', 'media_item', 'reaction')
+
+    def get_queryset(self):
+        from django.db.models import Q
+        base_qs = MediaReview.objects.select_related('user', 'media_item', 'reaction')
+        if not self.request.user.is_authenticated:
+            return base_qs.filter(is_public=True)
+        return base_qs.filter(Q(is_public=True) | Q(user=self.request.user))

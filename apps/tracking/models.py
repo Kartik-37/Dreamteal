@@ -13,7 +13,7 @@ import uuid
 from decimal import Decimal
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 
@@ -315,16 +315,20 @@ class DiaryLog(models.Model):
             models.Index(fields=['media_item']),
         ]
 
-    def sync_to_progress(self, sync_progress=True):
+    def sync_to_progress(self, sync_progress=True, is_new=True, old_synced_hours=Decimal('0.0')):
         """
         Implements approved Automatic Diary -> Progress Synchronization Rules:
         1. Default Behavior: advances current progress forward.
         2. Historical Non-Reversal Rule: historical logs never move progress backward.
         3. Manga forward advance: chapter advances forward.
-        4. Game additive accumulation: session_hours accumulates to total hours_played.
+        4. Game session-based hours aggregation:
+           - Game diary sessions are the source of truth for session playtime.
+           - Create: session_hours accumulates to total hours_played.
+           - Edit: adjusts hours_played by the delta between new and old session hours.
+           - Delete: decrements the session's hours from hours_played safely.
         5. sync_progress=False bypasses active progress updates.
         """
-        if not sync_progress or not self.progress_snapshot:
+        if not self.progress_snapshot:
             return
 
         media_type = self.media_item.media_type
@@ -332,6 +336,15 @@ class DiaryLog(models.Model):
             user=self.user,
             media_item=self.media_item
         )
+
+        if not sync_progress:
+            if media_type == 'GAME':
+                if is_new:
+                    self.progress_snapshot['_synced_hours'] = '0.0'
+                else:
+                    self.progress_snapshot['_synced_hours'] = str(old_synced_hours)
+                DiaryLog.objects.filter(pk=self.pk).update(progress_snapshot=self.progress_snapshot)
+            return
 
         if media_type == 'SERIES':
             snapshot_season = self.progress_snapshot.get('season')
@@ -361,11 +374,22 @@ class DiaryLog(models.Model):
                     manga_prog.save()
 
         elif media_type == 'GAME':
-            session_hours = self.progress_snapshot.get('session_hours')
             game_prog, _ = GameProgress.objects.get_or_create(progress=base_progress)
-            if session_hours:
-                # Additive accumulation for game playtime
-                game_prog.hours_played += Decimal(str(session_hours))
+            session_hours_raw = self.progress_snapshot.get('session_hours')
+            current_session_hours = Decimal(str(session_hours_raw)) if session_hours_raw is not None else Decimal('0.0')
+
+            if is_new:
+                if current_session_hours > 0:
+                    game_prog.hours_played += current_session_hours
+                    self.progress_snapshot['_synced_hours'] = str(current_session_hours)
+                    DiaryLog.objects.filter(pk=self.pk).update(progress_snapshot=self.progress_snapshot)
+            else:
+                diff = current_session_hours - old_synced_hours
+                if diff != Decimal('0.0'):
+                    game_prog.hours_played = max(Decimal('0.0'), game_prog.hours_played + diff)
+                self.progress_snapshot['_synced_hours'] = str(current_session_hours)
+                DiaryLog.objects.filter(pk=self.pk).update(progress_snapshot=self.progress_snapshot)
+
             completion_type = self.progress_snapshot.get('completion_type')
             if completion_type and completion_type in GameProgress.CompletionType.values:
                 game_prog.completion_type = completion_type
@@ -373,15 +397,56 @@ class DiaryLog(models.Model):
                 game_prog.platform_played_on = self.progress_snapshot['platform']
             game_prog.save()
 
+    @transaction.atomic
     def save(self, *args, **kwargs):
         """
-        Override save to handle automatic progress sync on creation unless explicitly opted out.
+        Override save to handle automatic progress sync on creation and updates
+        with strict transaction safety.
         """
         sync_progress = kwargs.pop('sync_progress', getattr(self, '_sync_progress', True))
         is_new = self._state.adding
+
+        old_synced_hours = Decimal('0.0')
+        if not is_new and self.media_item.media_type == 'GAME':
+            orig = DiaryLog.objects.filter(pk=self.pk).values('progress_snapshot').first()
+            if orig and orig.get('progress_snapshot'):
+                snap = orig['progress_snapshot']
+                raw_h = snap.get('_synced_hours')
+                if raw_h is not None:
+                    try:
+                        old_synced_hours = Decimal(str(raw_h))
+                    except (ValueError, TypeError):
+                        old_synced_hours = Decimal('0.0')
+
         super().save(*args, **kwargs)
-        if is_new:
-            self.sync_to_progress(sync_progress=sync_progress)
+        self.sync_to_progress(sync_progress=sync_progress, is_new=is_new, old_synced_hours=old_synced_hours)
+
+    @transaction.atomic
+    def delete(self, *args, **kwargs):
+        """
+        Override delete to decrement game session hours from GameProgress
+        if this session was previously synced.
+        """
+        if self.media_item.media_type == 'GAME' and self.progress_snapshot:
+            raw_h = self.progress_snapshot.get('_synced_hours')
+            synced_hours = Decimal('0.0')
+            if raw_h is not None:
+                try:
+                    synced_hours = Decimal(str(raw_h))
+                except (ValueError, TypeError):
+                    synced_hours = Decimal('0.0')
+
+            if synced_hours > 0:
+                base_progress = UserMediaProgress.objects.filter(
+                    user=self.user,
+                    media_item=self.media_item
+                ).first()
+                if base_progress and hasattr(base_progress, 'game_progress'):
+                    game_prog = base_progress.game_progress
+                    game_prog.hours_played = max(Decimal('0.0'), game_prog.hours_played - synced_hours)
+                    game_prog.save()
+
+        super().delete(*args, **kwargs)
 
     def __str__(self):
         rewatch = " (Rewatch)" if self.is_rewatch_or_replay else ""

@@ -797,3 +797,239 @@ class QueryParameterValidationTestCase(TestCase):
         res = self.client.get('/api/v1/tracking/logs/?month=99')
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('month', res.data)
+
+
+class LegacyProviderFieldsRemovedTestCase(TestCase):
+    def test_legacy_provider_id_fields_not_on_mediaitem(self):
+        """Proves tmdb_id, mal_id, rawg_id have been completely removed from MediaItem model."""
+        field_names = [f.name for f in MediaItem._meta.get_fields()]
+        self.assertNotIn('tmdb_id', field_names)
+        self.assertNotIn('mal_id', field_names)
+        self.assertNotIn('rawg_id', field_names)
+
+    def test_provider_identity_stored_only_via_external_media_mapping(self):
+        """Proves third-party identities are stored canonically via ExternalMediaMapping."""
+        item = MediaItem.objects.create(
+            media_type='MOVIE', title='Inception', slug='inception-2010', release_year=2010
+        )
+        prov = ExternalProvider.objects.create(provider_key='tmdb', display_name='TMDB', active=True)
+        mapping = ExternalMediaMapping.objects.create(
+            media_item=item,
+            provider=prov,
+            external_id='27205',
+            external_url='https://www.themoviedb.org/movie/27205'
+        )
+        self.assertEqual(item.external_mappings.count(), 1)
+        self.assertEqual(item.external_mappings.first().external_id, '27205')
+
+
+class MetadataRefreshAndTaxonomyReconciliationTestCase(TestCase):
+    def setUp(self):
+        self.registry = ProviderRegistry()
+        self.prov = ExternalProvider.objects.create(provider_key='tmdb', display_name='TMDB', active=True)
+        self.item = MediaItem.objects.create(
+            media_type='MOVIE',
+            title='Old Title',
+            slug='old-title-2020',
+            release_year=2020,
+            synopsis='Old synopsis.'
+        )
+        self.g_action = Genre.objects.create(name='Action', slug='action')
+        self.g_scifi = Genre.objects.create(name='Sci-Fi', slug='sci-fi')
+        self.item.genres.set([self.g_action, self.g_scifi])
+
+        self.mapping = ExternalMediaMapping.objects.create(
+            media_item=self.item,
+            provider=self.prov,
+            external_id='500',
+            external_url='https://themoviedb.org/movie/500'
+        )
+
+    @patch.object(TMDBProvider, 'get_details')
+    def test_force_refresh_updates_provider_owned_fields_and_reconciles_genres(self, mock_get_details):
+        """
+        Proves force_refresh overwrites old title, synopsis, release_year,
+        and reconciles genres (Old: Action + Sci-Fi -> New: Action + Thriller).
+        """
+        mock_get_details.return_value = NormalizedMediaDetail(
+            provider='tmdb',
+            external_id='500',
+            external_url='https://themoviedb.org/movie/500',
+            title='New Refreshed Title',
+            media_type='MOVIE',
+            slug_candidate='new-refreshed-title-2021',
+            release_year=2021,
+            synopsis='Freshly synchronized synopsis from TMDB.',
+            genres=['Action', 'Thriller']
+        )
+
+        item, created = self.registry.import_media('tmdb', '500', media_type='MOVIE', force_refresh=True)
+        self.assertFalse(created)
+        item.refresh_from_db()
+
+        self.assertEqual(item.title, 'New Refreshed Title')
+        self.assertEqual(item.release_year, 2021)
+        self.assertEqual(item.synopsis, 'Freshly synchronized synopsis from TMDB.')
+
+        # Verify taxonomy reconciliation
+        genre_slugs = set(item.genres.values_list('slug', flat=True))
+        self.assertIn('action', genre_slugs)
+        self.assertIn('thriller', genre_slugs)
+        self.assertNotIn('sci-fi', genre_slugs)
+
+
+class MangaVsManhwaSearchAndDiscoveryTestCase(TestCase):
+    def setUp(self):
+        self.registry = ProviderRegistry()
+
+    @patch.object(AniListProvider, '_post_graphql')
+    def test_anilist_search_filters_by_country_code(self, mock_post):
+        mock_post.return_value = {
+            'Page': {
+                'media': [{
+                    'id': 105398,
+                    'title': {'english': 'Solo Leveling'},
+                    'countryOfOrigin': 'KR',
+                    'startDate': {'year': 2018},
+                    'genres': ['Action', 'Fantasy']
+                }]
+            }
+        }
+        provider = AniListProvider()
+
+        # Manhwa search
+        res_manhwa = provider.search('Solo Leveling', subtype='MANHWA')
+        self.assertEqual(len(res_manhwa), 1)
+        self.assertEqual(res_manhwa[0].subtype, 'MANHWA')
+        call_vars = mock_post.call_args[0][1]
+        self.assertEqual(call_vars.get('country'), 'KR')
+
+        # Manga search
+        provider.search('Berserk', subtype='MANGA')
+        call_vars_manga = mock_post.call_args[0][1]
+        self.assertEqual(call_vars_manga.get('country'), 'JP')
+
+    @patch('requests.get')
+    def test_jikan_search_filters_by_type_parameter(self, mock_get):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            'data': [{
+                'mal_id': 121496,
+                'title': 'Solo Leveling',
+                'type': 'Manhwa',
+                'published': {'prop': {'from': {'year': 2018}}},
+                'genres': [{'name': 'Action'}]
+            }]
+        }
+        mock_get.return_value = mock_resp
+
+        provider = JikanProvider()
+        res = provider.search('Solo Leveling', subtype='MANHWA')
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res[0].subtype, 'MANHWA')
+        params = mock_get.call_args[1]['params']
+        self.assertEqual(params.get('type'), 'manhwa')
+
+
+class AniListToJikanActualImportFallbackTestCase(TestCase):
+    def setUp(self):
+        self.registry = ProviderRegistry()
+
+    @patch.object(AniListProvider, 'get_details')
+    @patch.object(JikanProvider, 'search')
+    @patch.object(JikanProvider, 'get_details')
+    def test_import_media_falls_back_to_jikan_with_title_hint(
+        self, mock_jikan_details, mock_jikan_search, mock_anilist_details
+    ):
+        """
+        Tests the actual registry.import_media() path when AniList detail retrieval fails
+        and safe title-based Jikan fallback is triggered.
+        """
+        # AniList detail lookup fails
+        mock_anilist_details.return_value = None
+
+        # Jikan search finds candidates
+        mock_jikan_search.return_value = [
+            NormalizedSearchResult(
+                provider='jikan',
+                external_id='121496',
+                title='Solo Leveling',
+                media_type='MANGA',
+                subtype='MANHWA'
+            )
+        ]
+
+        # Jikan detail payload matching title
+        mock_jikan_details.return_value = NormalizedMediaDetail(
+            provider='jikan',
+            external_id='121496',
+            external_url='https://myanimelist.net/manga/121496',
+            title='Solo Leveling',
+            media_type='MANGA',
+            slug_candidate='solo-leveling-2018',
+            release_year=2018,
+            synopsis='Solo Leveling synopsis via Jikan fallback.',
+            manga_type='MANHWA',
+            author='Chugong'
+        )
+
+        item, created = self.registry.import_media(
+            provider_key='anilist',
+            external_id='105398',
+            title_hint='Solo Leveling'
+        )
+        self.assertTrue(created)
+        self.assertEqual(item.title, 'Solo Leveling')
+        self.assertEqual(item.manga_detail.manga_type, 'MANHWA')
+
+        # Verify both mappings exist: requested anilist ID and resolved jikan ID
+        mappings = ExternalMediaMapping.objects.filter(media_item=item)
+        prov_keys = set(m.provider.provider_key for m in mappings)
+        self.assertIn('anilist', prov_keys)
+        self.assertIn('jikan', prov_keys)
+
+
+class ProviderActiveStateTestCase(TestCase):
+    def setUp(self):
+        self.registry = ProviderRegistry()
+        self.rawg_prov, _ = ExternalProvider.objects.get_or_create(
+            provider_key='rawg', defaults={'display_name': 'RAWG', 'active': True}
+        )
+
+    def test_inactive_provider_routing_suppressed(self):
+        """Verifies inactive provider is suppressed in search, discover, and import."""
+        self.rawg_prov.active = False
+        self.rawg_prov.save()
+
+        self.assertFalse(self.registry.is_provider_active('rawg'))
+
+        # Search GAME returns empty and skips inactive provider
+        res = self.registry.search('Zelda', category='GAME')
+        self.assertEqual(res, [])
+
+        # Import raises ValueError for disabled provider
+        with self.assertRaises(ValueError) as ctx:
+            self.registry.import_media('rawg', '1234')
+        self.assertIn("disabled", str(ctx.exception).lower())
+
+
+class SeedCatalogValidationTestCase(TestCase):
+    def test_seed_catalog_mappings_match_verified_titles(self):
+        """Verifies seed data provider IDs are accurate and match expected titles."""
+        from django.core.management import call_command
+        call_command('seed_catalog')
+
+        batman_map = ExternalMediaMapping.objects.get(provider__provider_key='tmdb', external_id='414906')
+        self.assertEqual(batman_map.media_item.title, 'The Batman')
+
+        severance_map = ExternalMediaMapping.objects.get(provider__provider_key='tmdb', external_id='97546')
+        self.assertEqual(severance_map.media_item.title, 'Severance')
+
+        solo_map = ExternalMediaMapping.objects.get(provider__provider_key='anilist', external_id='105398')
+        self.assertEqual(solo_map.media_item.title, 'Solo Leveling')
+
+        cyberpunk_map = ExternalMediaMapping.objects.get(provider__provider_key='rawg', external_id='41494')
+        self.assertEqual(cyberpunk_map.media_item.title, 'Cyberpunk 2077')
+        self.assertIn('cyberpunk-2077', cyberpunk_map.external_url)
+        self.assertNotIn('witcher', cyberpunk_map.external_url)

@@ -1,14 +1,14 @@
 # DreamTeal Project Progress Tracker
 
-## Current Status: Phase 2 COMPLETED & VERIFIED | Ready for Phase 3 (Recommendation Engine)
+## Current Status: Phase 2 FINAL CORRECTION PASS COMPLETE & VERIFIED | Ready for Phase 3 Review
 
 **Git Milestone Baseline**:
 - **Milestone Tag**: `v0.4.1-alpha`
 - **Baseline Commit**: `caaed85` (`feat(phase-2): baseline verified catalog, tracking, reviews, and external provider api layer`)
 - **Integration Branch**: `develop`
-- **Main Branch**: `main` (locked to stable milestone `v0.4.1-alpha`)
-- **Remote Status**: Awaiting GitHub remote URL configuration
-- **Verification**: 56/56 automated tests passing (100% offline, deterministic)
+- **Main Branch**: `main` (synced with `origin/main`)
+- **Remote Status**: Synchronized with `origin` (`https://github.com/Kartik-37/Dreamteal.git`)
+- **Verification**: 72/72 automated tests passing (100% offline, deterministic)
 
 ---
 
@@ -77,6 +77,17 @@
   - Security & Dependencies: Pinned `requirements.txt`, created `.gitignore`, made `SECRET_KEY`, `DEBUG`, and `ALLOWED_HOSTS` environment-controlled.
   - Data Integrity Regression: Verified provider sync never touches user tracking, progress, diary logs, or reviews.
   - 100% Offline Testing: Normal test runner is 100% deterministic and offline; optional live connectivity verified via `test_external_providers`.
+- [x] 17. Phase 2 Final Correction Pass:
+  - Canonical Provider Identity: Completely removed `tmdb_id`, `mal_id`, `rawg_id` from `MediaItem`; third-party identities are stored exclusively via `ExternalProvider` and `ExternalMediaMapping` (Migration `0003`).
+  - Real Environment Loading: Integrated `python-dotenv` in `dreamteal/settings.py` for automatic `.env` loading; removed hard-coded `SECRET_KEY` fallbacks; enforced startup crash in production (`DEBUG=False`) with `ImproperlyConfigured` if missing or insecure.
+  - True Manga vs Manhwa Search & Discovery: AniList searches/feeds filter by `countryOfOrigin: "KR"` vs `"JP"` and Jikan by `type: "manhwa"` vs `"manga"`; normalized results carry `subtype` without altering canonical `MediaItem.media_type = MANGA`.
+  - Real Metadata Refresh & Taxonomy Reconciliation: `force_refresh=True` updates provider-owned catalog metadata (title, synopsis, release year, posters, backdrops, detail extensions) and reconciles provider-supplied taxonomy (`genres`, `tags`) while strictly protecting user-owned tracking/reviews data.
+  - Verified Seed Data Provider IDs: Fixed Cyberpunk 2077 to RAWG 41494 (`cyberpunk-2077`); added validation routine to `seed_catalog` to prevent invalid bindings.
+  - Safe AniList $\rightarrow$ Jikan Import Fallback: Integrated `title_hint` into `import_media` and `fetch_details` with fuzzy string similarity confidence scoring ($\ge 75.0$).
+  - Transaction-Safe Game Diary Aggregation: Consumption sessions are the source of truth for playtime; edits and deletions atomically update `GameProgress.hours_played` without double-counting; isolated when `sync_progress=False`.
+  - Privacy & Ownership Controls: Scoped private reviews strictly to owners (`404 Not Found` for non-owners); scoped all tracking querysets to authenticated users.
+  - Provider Active State Routing: Respects `ExternalProvider.active` database switch across search, discovery, and imports.
+  - 100% Offline Test Suite: 72 automated unit and integration tests passing offline with deterministic mocks.
 
 
 ---

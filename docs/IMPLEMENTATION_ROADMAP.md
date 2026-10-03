@@ -46,19 +46,23 @@ Implement backend data foundations in strict verified order:
 
 ---
 
-### Phase 2: Core Backend REST API + External Media Providers (COMPLETED & VERIFIED)
+### Phase 2: Core Backend REST API + External Media Providers (FINAL CORRECTION PASS COMPLETE)
 - [x] Visual Model Correction: Completely eliminated reaction icons/emoji; implemented dedicated color tokens and typography text labels; removed `icon` column from database.
 - [x] External Provider Architecture: Extensible `BaseMetadataProvider` interface and adapters for TMDB, AniList, Jikan, and RAWG.
 - [x] Discovery Semantics Correction: Distinct `popular`, `latest`, `trending`, and `upcoming` feeds across all providers.
-- [x] Safe AniList $\rightarrow$ Jikan Fallback: Title normalization and confidence scoring; never passes AniList IDs to Jikan; captures AniList `idMal`.
-- [x] Cross-Provider Deduplication Service: `MediaMatcherService` with multi-signal confidence scoring ($\ge 75.0$ threshold) preventing duplicate catalog items.
+- [x] Canonical Provider Identity: Removed legacy `tmdb_id`, `mal_id`, `rawg_id` from `MediaItem`; third-party identity stored exclusively in `ExternalProvider` and `ExternalMediaMapping` with migration `0003`.
+- [x] Real Environment Loading: Integrated `python-dotenv` to load `.env` automatically; removed hard-coded `SECRET_KEY` fallbacks; enforced startup validation in production (`ImproperlyConfigured`).
+- [x] True Manga vs Manhwa Search & Discovery: Filtered AniList by `countryOfOrigin` (`KR` vs `JP`) and Jikan by `type` (`manhwa` vs `manga`) without altering the canonical `MediaItem.media_type = MANGA`.
+- [x] Real Metadata Refresh & Taxonomy Reconciliation: Enabled updating of provider-owned catalog metadata on `force_refresh=True` and reconciled provider taxonomy (`genres`, `tags`) while strictly protecting user-owned data.
+- [x] Verified Seed Data Provider IDs: Verified all seed provider mappings (Cyberpunk 2077 -> RAWG 41494 `cyberpunk-2077`) with automated validation preventing invalid bindings.
+- [x] AniList $\rightarrow$ Jikan Import Fallback: Integrated `title_hint` into `import_media` and `fetch_details` with `MediaMatcherService` confidence scoring ($\ge 75.0$).
+- [x] Transaction-Safe Game Diary Aggregation: Consumption sessions are the source of truth for playtime; edits and deletions atomically update `GameProgress.hours_played` without double-counting; isolated when `sync_progress=False`.
+- [x] Privacy & Access Control Enforcement: Scoped private reviews strictly to owners (`404 Not Found` for non-owners); scoped all tracking querysets to authenticated users.
+- [x] Provider Active State Routing: Respects `ExternalProvider.active` database switch across search, discovery, and imports.
 - [x] Region-Aware TMDB Watch Providers: Configurable `DEFAULT_PROVIDER_REGION=IN` without arbitrary country fallbacks.
 - [x] Media Import Lifecycle: Returns `201 Created` for new records, `200 OK` for existing/refreshed records.
 - [x] Balanced Universal Search: Category-aware quotas and round-robin interleaving preventing provider domination.
-- [x] Query Parameter Validation: Strict DRF serializers for search, discovery, catalog, and tracking parameters returning controlled 400 Bad Request responses.
-- [x] Security Hardening & Dependency Pinning: Environment-controlled `SECRET_KEY`, `DEBUG`, and `ALLOWED_HOSTS`; comprehensive `.gitignore` and pinned `requirements.txt`.
-- [x] Data Integrity Regression: Verified provider sync never touches user status, progress, diary logs, or reviews.
-- [x] 100% Offline Test Suite: 56 automated unit and integration tests passing offline with deterministic mocks; optional live verification via `test_external_providers`.
+- [x] 100% Offline Test Suite: 72 automated unit and integration tests passing offline with deterministic mocks.
 
 
 

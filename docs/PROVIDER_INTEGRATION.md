@@ -159,23 +159,57 @@ When `GET /api/v1/media/search/?q=<query>` is called:
 
 ---
 
-## 9. Data Integrity & User Data Immutability
+## 9. Canonical Provider Identity & Metadata Ownership Boundaries
 
-Provider synchronization **strictly updates catalog-owned metadata only**. Provider sync is structurally barred from modifying:
-- `UserMediaStatus`
-- `UserMediaProgress`
-- `SeriesProgress`
-- `MangaProgress`
-- `GameProgress`
-- `DiaryLog`
-- `MediaReview`
-- `Collection` and `CollectionItem`
+### Canonical Provider Identity Architecture
+All third-party IDs (`tmdb_id`, `mal_id`, `rawg_id`) have been completely removed from `MediaItem`. Third-party identity is managed exclusively via:
+- `ExternalProvider` (provider key, name, base URL, active flag)
+- `ExternalMediaMapping` (FK to `MediaItem`, FK to `ExternalProvider`, `external_id`, `external_url`, `last_synced_at`)
 
-This invariant is verified by `DataIntegrityRegressionTestCase`.
+### Ownership Boundaries
+DreamTeal strictly partitions metadata into three distinct tiers:
+
+1. **Provider-Owned Catalog Metadata**:
+   - `MediaItem`: `title`, `synopsis`, `release_year`, `poster_image_url`, `backdrop_image_url`
+   - Extension details: `MovieDetail` (director, studio, duration, box office), `SeriesDetail` (creators, total seasons, total episodes), `MangaDetail` (author, artist, total chapters, total volumes, `manga_type`), `GameDetail` (developer, publisher, platforms)
+   - Taxonomy: `genres`, `tags` supplied by third-party providers. When `force_refresh=True` is provided, provider-supplied taxonomy is reconciled to reflect current provider data.
+   - Provider mappings: `ExternalMediaMapping` records.
+   *Sync rule*: On `force_refresh=True`, provider-owned fields are updated with fresh provider data.
+
+2. **DreamTeal Platform Catalog Metadata**:
+   - `slug`, `media_type` (`MOVIE`, `SERIES`, `MANGA`, `GAME`), internal timestamps (`created_at`, `updated_at`).
+
+3. **User-Owned Metadata (Strictly Immutable to Providers)**:
+   - `UserMediaStatus` (status choice, dates)
+   - `UserMediaProgress` (base progress, episode/chapter/volume counters)
+   - `SeriesProgress`, `MangaProgress`, `GameProgress` (`hours_played`, `completion_type`, `platform_played_on`)
+   - `DiaryLog` (session dates, notes, ratings snapshots, session duration)
+   - `MediaReview` (qualitative reactions, written review, spoilers, privacy settings)
+   - `Collection`, `CollectionItem`
+
+**Absolute Rule**: Provider synchronization is structurally barred from mutating user-owned metadata under all circumstances.
 
 ---
 
-## 10. Strict Zero-Star & Zero-Rating Policy
+## 10. Provider Active State Routing
+Routing to external metadata providers respects the `ExternalProvider.active` database flag:
+- `ProviderRegistry.is_provider_active(provider_key)` checks DB status.
+- Inactive providers are bypassed in search, discovery, and direct imports.
+- Fallback paths (e.g. AniList -> Jikan) verify target provider activation before routing.
+
+---
+
+## 11. AniList -> Jikan Safe Detail Fallback
+AniList and Jikan (MyAnimeList) do NOT share internal ID namespaces. AniList IDs cannot be queried directly against Jikan.
+When AniList detail retrieval fails:
+1. `registry.fetch_details('anilist', external_id, title_hint=...)` captures a safe title hint.
+2. It queries Jikan search with the title hint (`subtype='MANHWA'` or `'MANGA'`).
+3. Candidates are evaluated using `MediaMatcherService` multi-signal similarity scoring (normalized titles, alt titles, release year).
+4. If confidence >= 75.0%, the Jikan detail is safely bound. Otherwise, controlled failure is returned.
+
+---
+
+## 12. Strict Zero-Star & Zero-Rating Policy
 
 Third-party provider score and rating metrics:
 - TMDB `vote_average` / `vote_count`
@@ -187,7 +221,7 @@ are **completely excluded** from `NormalizedSearchResult`, `NormalizedMediaDetai
 
 ---
 
-## 11. Deterministic & Offline Testing Architecture
+## 13. Deterministic & Offline Testing Architecture
 
 - **`python manage.py test`**:
   - 100% deterministic and offline.
@@ -196,3 +230,4 @@ are **completely excluded** from `NormalizedSearchResult`, `NormalizedMediaDetai
 - **`python manage.py test_external_providers`**:
   - Optional live connectivity verification command.
   - Tests reachability of active providers without blocking the main test suite.
+

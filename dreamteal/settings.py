@@ -7,20 +7,47 @@ import os
 import sys
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+from dotenv import load_dotenv
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Automatically load environment variables from .env if present
+load_dotenv(BASE_DIR / '.env')
 
 # Add 'apps' to Python sys.path so apps can import cleanly if needed
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dreamteal-dev-key-change-in-production-^5x7#')
-
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
+DEBUG_ENV = os.environ.get('DEBUG')
+DEBUG = DEBUG_ENV.lower() in ('true', '1', 'yes') if DEBUG_ENV is not None else True
 
-ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost,testserver').split(',') if h.strip()]
+# SECURITY WARNING: keep the secret key used in production secret!
+# Never keep a known default fallback in source code.
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    if 'test' in sys.argv:
+        # Ephemeral isolated key strictly for offline test runner execution when no .env is present
+        SECRET_KEY = 'django-insecure-test-runner-ephemeral-key-never-used-in-production'
+    else:
+        raise ImproperlyConfigured(
+            "The SECRET_KEY environment variable is required. "
+            "Please create a .env file (copy from .env.example) or export SECRET_KEY in your environment."
+        )
+
+# Validate that insecure development keys are never permitted when DEBUG is False
+if not DEBUG and 'django-insecure' in SECRET_KEY:
+    raise ImproperlyConfigured("Insecure development SECRET_KEY cannot be used when DEBUG=False.")
+
+ALLOWED_HOSTS_ENV = os.environ.get('ALLOWED_HOSTS')
+if ALLOWED_HOSTS_ENV:
+    ALLOWED_HOSTS = [h.strip() for h in ALLOWED_HOSTS_ENV.split(',') if h.strip()]
+elif DEBUG:
+    ALLOWED_HOSTS = ['127.0.0.1', 'localhost', 'testserver']
+else:
+    raise ImproperlyConfigured("ALLOWED_HOSTS must be explicitly defined in environment/.env when DEBUG=False.")
 
 
 

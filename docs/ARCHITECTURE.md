@@ -110,5 +110,10 @@ External Third-Party APIs (TMDB, AniList, Jikan, RAWG)
 5. **Cross-Provider Deduplication**: `(provider, external_id)` uniqueness and `MediaMatcherService` confidence scoring prevent duplicate records across providers.
 6. **Fault Tolerance**: Network failures or rate limits from external APIs fail gracefully without bringing down the core application.
 7. **Deterministic Offline Tests**: Main test suite executes 100% offline using deterministic mocks, keeping live API checks completely optional.
+8. **Canonical Provider Identity**: All legacy direct provider ID fields (`tmdb_id`, `mal_id`, `rawg_id`) are completely removed from `MediaItem`; third-party identities are managed exclusively through `ExternalProvider` and `ExternalMediaMapping`.
+9. **Safe Environment & Secret Security**: `.env` configuration is loaded automatically via `python-dotenv`. Hard-coded fallback secrets are barred from source code; missing production `SECRET_KEY` fails immediately at startup with `ImproperlyConfigured`.
+10. **Provider Active State Routing**: Provider routing respects the `ExternalProvider.active` database switch, bypassing disabled providers in search, feeds, and imports.
+11. **Transaction-Safe Diary Aggregation**: Game diary consumption sessions act as the transactional source of truth for session gameplay, with atomic updates/deletions maintaining consistent cumulative `GameProgress.hours_played`.
+
 
 

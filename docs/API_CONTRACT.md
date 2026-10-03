@@ -90,6 +90,7 @@ This document defines the REST API endpoints provided by the Django backend. All
     "provider": "tmdb",
     "external_id": "157336",
     "media_type": "MOVIE",
+    "title_hint": "Interstellar",
     "force_refresh": false
   }
   ```
@@ -325,8 +326,12 @@ This document defines the REST API endpoints provided by the Django backend. All
   ```
 
 ### `GET /api/v1/reviews/<review_id>/`
-- **Description**: Retrieve a single review by ID.
-- **Response**: `200 OK`.
+- **Description**: Retrieve a single review by ID with strict privacy access controls.
+- **Privacy Access Rules**:
+  - `is_public: true`: Returns `200 OK` for any caller (anonymous or authenticated).
+  - `is_public: false`:
+    - Owning authenticated user: Returns `200 OK`.
+    - Other authenticated user or unauthenticated caller: Returns `404 Not Found`.
 
 ### `PATCH /api/v1/reviews/<review_id>/`
 - **Description**: Update an existing review.

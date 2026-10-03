@@ -150,4 +150,21 @@ This file records key decisions made during the design and development of DreamT
   7. **100% Offline Test Suite**: All tests in `python manage.py test` must be 100% mocked and offline; live network reachability is isolated into the optional `python manage.py test_external_providers` command.
 - **Rationale**: Prevents data corruption, ensures accurate discovery semantics, eliminates test flakiness, and optimizes search fairness across media categories.
 
+---
+
+### DEC-013: Canonical Provider Identity, Metadata Ownership Boundaries, Game Hours Lifecycle & Privacy Controls
+- **Date**: 2026-10-03
+- **Status**: APPROVED
+- **Context**: Final Phase 2 correction pass to remove legacy direct provider fields, define clear catalog metadata sync boundaries, ensure transaction-safe game hours lifecycle, enforce private review security, and validate seed data.
+- **Decision**:
+  1. **Canonical Provider Identity**: Completely remove legacy `tmdb_id`, `mal_id`, `rawg_id` fields from `MediaItem`. All provider identity is stored canonically in `ExternalProvider` and `ExternalMediaMapping`.
+  2. **Metadata Ownership Boundaries**: Provider synchronization (`force_refresh=True`) updates provider-owned fields (`title`, `synopsis`, `release_year`, `poster_image_url`, `backdrop_image_url`, detail models) and reconciles provider-supplied taxonomy (`genres`, `tags`). User-owned tracking, progress, diary logs, reviews, and collections are strictly immutable to provider sync.
+  3. **Manga vs Manhwa Subtypes**: DreamTeal maintains `MANGA` as the single canonical local media type, using `MangaDetail.manga_type` for subtype differentiation (`MANGA`, `MANHWA`, `MANHUA`, `WEBTOON`). AniList and Jikan adapters pass subtype filters (`countryOfOrigin: "KR"` / `type=manhwa`) to return authentic Manhwa results.
+  4. **Game Diary Hours Lifecycle**: Diary sessions are the source of truth for session gameplay. `GameProgress.hours_played` is maintained consistently through transaction-safe hooks on creation, edit (delta calculation), deletion (deducting synced session hours), and is unaffected when `sync_progress=False`.
+  5. **Review Privacy & Scoping**: Private reviews (`is_public=False`) are visible only to the owner (404 Not Found for anonymous and non-owning authenticated users). All user tracking endpoints (status, progress, diary logs) strictly filter querysets by the authenticated user.
+  6. **Seed Data Integrity**: Seed data binds verified provider IDs (e.g. Cyberpunk 2077 -> RAWG 41494 `cyberpunk-2077`) and executes validation on seed to prevent invalid bindings.
+  7. **Safe Environment Management**: Configuration loads automatically via `python-dotenv`. Hard-coded fallback secrets are banned; production startup without `SECRET_KEY` fails immediately with `ImproperlyConfigured`.
+- **Rationale**: Eliminates legacy redundant schema columns, guarantees data integrity across game tracking, protects user privacy, and ensures clean environment configuration.
+
+
 
