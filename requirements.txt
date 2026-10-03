@@ -1,0 +1,14 @@
+# DreamTeal Backend Dependencies
+# Python 3.12+
+
+# Core Web Framework
+Django==5.2.7
+
+# REST API Framework
+djangorestframework==3.18.0
+
+# CORS Headers for React Frontend
+django-cors-headers==4.9.0
+
+# HTTP Client for Third-Party Metadata Providers
+requests==2.32.3

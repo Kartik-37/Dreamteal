@@ -1,0 +1,44 @@
+# Python bytecode & caches
+__pycache__/
+*.py[cod]
+*.pyo
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
+
+# Django / local database & media uploads
+db.sqlite3
+*.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+
+# Frontend (React / Vite)
+node_modules/
+dist/
+.vite/
+
+# IDE & editor configurations
+.idea/
+.vscode/
+*.code-workspace
+
+# Operating System artifacts
+.DS_Store
+Thumbs.db
+
+# Test & coverage artifacts
+.coverage
+htmlcov/
