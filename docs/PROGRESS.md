@@ -2,6 +2,14 @@
 
 ## Current Status: Phase 2 COMPLETED & VERIFIED | Ready for Phase 3 (Recommendation Engine)
 
+**Git Milestone Baseline**:
+- **Milestone Tag**: `v0.4.1-alpha`
+- **Baseline Commit**: `caaed85` (`feat(phase-2): baseline verified catalog, tracking, reviews, and external provider api layer`)
+- **Integration Branch**: `develop`
+- **Main Branch**: `main` (locked to stable milestone `v0.4.1-alpha`)
+- **Remote Status**: Awaiting GitHub remote URL configuration
+- **Verification**: 56/56 automated tests passing (100% offline, deterministic)
+
 ---
 
 ### Phase 0: Requirements Discovery & Architecture Alignment (COMPLETED)
