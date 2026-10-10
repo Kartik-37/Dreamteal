@@ -30,8 +30,8 @@ $$\text{Score}(A, B) = w_t \cdot \text{VibeTagMatch}(A, B) + w_g \cdot \text{Gen
 | :--- | :---: | :--- | :--- |
 | **Vibe & Thematic Tag Match** | $w_t = 40.0$ | $\text{Jaccard}(T_A, T_B) = \frac{\|T_A \cap T_B\|}{\|T_A \cup T_B\|}$ | Matches specific thematic hooks (e.g. *Cyberpunk*, *Dark Fantasy*, *Neo-Noir*). Outputs e.g. `"Shares the Cyberpunk and Dystopian themes."` |
 | **Normalized Genre Match** | $w_g = 30.0$ | $\text{Jaccard}(G_A, G_B) = \frac{\|G_A \cap G_B\|}{\|G_A \cup G_B\|}$ | Normalizes broad categories using the Jaccard index so broad genres do not overwhelm focused overlap. Outputs e.g. `"Shares Action and Sci-Fi genres."` |
-| **Cross-Media / Franchise Link** | $w_c = 15.0$ | Discrete bonus ($15.0$ or $0.0$) | Evaluates verified franchise tags (`franchise-*`, `batman`, `cyberpunk`, etc.) or cross-category creator overlap. Outputs e.g. `"Part of the Batman universe."` |
-| **Qualitative Reaction Affinity** | $w_r = 15.0$ | User preference bonus + Community consensus | Evaluates user positive reactions (`Peak`, `Loved It`) on shared tags/genres, applies penalties for `Not My Thing`, and factors community public verdicts without numeric averages. |
+| **Cross-Media / Franchise Link** | $w_c = 15.0$ | Discrete bonus ($15.0$ or $0.0$) | Evaluates verified franchise tags (`franchise-*`, `universe-*`, `star-wars`, `middle-earth`, `batman-universe`, etc.) or verified cross-category creator overlap. Generic themes (e.g. *Cyberpunk*, *Dystopian*) are thematic tags and never treated as franchise links. Outputs e.g. `"Part of the Batman universe."` |
+| **Qualitative Reaction Affinity** | $w_r = 15.0$ | User preference bonus + Community consensus | Evaluates user positive reactions (`Peak`, `Loved It`, `Good Time`) as positive preference bonuses, treats `Not My Thing` as negative preference feedback against reviewed media's relevant genres/tags (without penalizing unrelated works), and factors community public verdicts without numeric averages. |
 | **Minimum Evidence Threshold** | Threshold $= 15.0$ | $\text{Score}(A, B) \ge 15.0$ | Eliminates weak coincidental overlaps (e.g. sharing only 1 broad genre with 0 shared tags). |
 
 ### B. Deterministic Tie-Breaking
@@ -54,13 +54,18 @@ When the user is authenticated:
 3. **Abandoned**: Items marked `DROPPED`.
 4. **Paused**: Items marked `PAUSED`.
 5. **Diary History**: Items with recorded session entries in `DiaryLog`.
-6. **Rejected**: Items reviewed by the user with the qualitative `Skip` reaction.
+6. **Rejected**: Items reviewed by the user with the qualitative `Skip` reaction (strictly an item-level exclusion; does not exclude other works sharing tags).
 
 ### B. Eligible Candidates:
 1. **Unconsumed Catalog Works**: Clean discovery candidates the user has not yet tracked.
 2. **Backlog Intentions**: Items marked `PLAN_TO_WATCH`, `PLAN_TO_READ`, or `BACKLOG` remain prime candidates when they match the base work.
 
-### C. Anonymous Discovery:
+### C. Negative Preference Feedback (`Not My Thing`):
+- When a user reacts `Not My Thing` to a work, its specific genres and tags provide negative preference signals, penalizing related candidates that share those attributes.
+- Unrelated candidates sharing none of the disliked genres/tags receive zero penalty.
+- Disliking one title in a franchise does not remove franchise relationship points for another title.
+
+### D. Anonymous Discovery:
 When unauthenticated (`user=None`), exclusions and personal affinity are bypassed, returning general content-based and community-praised recommendations.
 
 ---
@@ -73,7 +78,7 @@ When unauthenticated (`user=None`), exclusions and personal affinity are bypasse
   - `cross_category` (boolean, default `true`): If `false`, restricts results to candidates matching the source media's `media_type`.
   - `category` (string, optional): Explicit target category filter (`MOVIE`, `SERIES`, `MANGA`, `MANHWA`, `GAME`).
   - `limit` (integer, default `10`, min `1`, max `50`): Maximum recommendations returned.
-  - `include_scores` (boolean, default `false`, diagnostic only): Includes internal similarity score breakdown in development.
+  - `include_scores` (boolean, default `false`, diagnostic only): Includes internal similarity score breakdown; strictly restricted to `DEBUG=True` mode or authenticated staff users in production.
 
 ### Sample Response Envelope (200 OK):
 ```json
@@ -110,5 +115,5 @@ When unauthenticated (`user=None`), exclusions and personal affinity are bypasse
 ---
 
 ## 6. Known Limitations & Future Extensibility
-1. **Franchise Relationship Model**: DreamTeal does not currently have a standalone `Franchise` model or M2M table. Cross-media adaptation detection currently uses explicit universe/franchise tags (`KNOWN_FRANCHISE_TAG_SLUGS`) and creator overlaps across category extension models (`movie_detail.director`, `game_detail.developer`, `manga_detail.author`). The `RecommendationEngine.check_cross_media_relationship` method provides a clean extension hook for future franchise models.
+1. **Franchise Relationship Model**: DreamTeal does not currently have a standalone `Franchise` model or M2M table. Cross-media adaptation detection currently uses explicit universe/franchise tags (`KNOWN_FRANCHISE_IDENTIFIERS`, `franchise-*`, `universe-*`) and verified creator overlaps across category extension models (`movie_detail.director`, `game_detail.developer`, `manga_detail.author`). Generic themes (e.g. *Cyberpunk*, *Dark Fantasy*) are thematic tags and are never treated as franchises. The `RecommendationEngine.check_cross_media_relationship` method provides a clean extension hook for future franchise models.
 2. **Cold Start on Sparse Metadata**: If a source item has zero genres and zero tags, similarity cannot be calculated with confidence; the engine cleanly returns an empty list (`[]`) rather than fabricating fake suggestions.

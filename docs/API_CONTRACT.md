@@ -365,7 +365,7 @@ This document defines the REST API endpoints provided by the Django backend. All
   - `cross_category`: `true` | `false` (default: `true`)
   - `category`: `MOVIE` | `SERIES` | `MANGA` | `MANHWA` | `GAME` (optional)
   - `limit`: Integer from `1` to `50` (default: `10`)
-  - `include_scores`: `true` | `false` (development diagnostic option, default: `false`)
+  - `include_scores`: `true` | `false` (development diagnostic option, default: `false`, strictly restricted to `DEBUG=True` mode or authenticated staff users)
 - **Response Payload (200 OK)**:
   ```json
   {

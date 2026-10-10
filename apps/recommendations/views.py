@@ -44,6 +44,11 @@ class RecommendationNextView(APIView):
         limit = params.get('limit', 10)
         include_scores = params.get('include_scores', False)
 
+        # Diagnostic flag safety: restrict internal score exposure to DEBUG mode or authenticated staff
+        from django.conf import settings
+        if include_scores and not (settings.DEBUG or (request.user and request.user.is_staff)):
+            include_scores = False
+
         # 3. Compute recommendations via deterministic engine
         engine = RecommendationEngine()
         user = request.user if request.user.is_authenticated else None

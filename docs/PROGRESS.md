@@ -1,14 +1,15 @@
 # DreamTeal Project Progress Tracker
 
-## Current Status: Phase 3 DETERMINISTIC RECOMMENDATION ENGINE COMPLETE & VERIFIED | Ready for Phase 4
+## Current Status: Phase 3 AUDIT & CORRECTION PASS COMPLETE & VERIFIED | Ready for Review
 
 **Git Milestone Baseline**:
-- **Milestone Tag**: `v0.5.0-alpha`
+- **Milestone Tag**: `v0.5.1-alpha`
+- **Correction Branch**: `fix/recommendation-engine-audit`
 - **Feature Branch**: `feature/recommendation-engine` (commit `8e198b2`)
 - **Integration Branch**: `develop`
 - **Main Branch**: `main` (synced with `origin/main`)
-- **Remote Status**: Pushed and synchronized with `origin/feature/recommendation-engine`
-- **Verification**: 118/118 automated tests passing in 117.8s (100% offline, deterministic)
+- **Remote Status**: Synchronized with `origin`
+- **Verification**: 132/132 automated tests passing in 146.0s (100% offline, deterministic)
 
 ---
 
@@ -121,9 +122,14 @@
   - Implemented `GET /api/v1/recommendations/next/<slug>/` with `cross_category`, `category`, `limit` (1-50, default 10), and developer-only diagnostic `include_scores` parameters.
   - Validates query parameters (`400 Bad Request` on invalid input), returns `404 Not Found` on unknown base media slug.
   - High performance prefetching (`select_related`, `prefetch_related`) eliminating N+1 database queries.
-- [x] 6. Automated Testing & Verification:
-  - 30 new tests in `apps/recommendations/tests.py` covering similarity scoring, cross-media matching, personalization exclusions, privacy boundaries, API contracts, zero-star guarantees, and deduplication.
-  - Total test suite now at 118/118 passing tests offline (100% offline, deterministic).
+- [x] 6. Automated Testing & Verification Baseline:
+  - 30 tests in `apps/recommendations/tests.py` covering initial similarity scoring, cross-media matching, personalization exclusions, privacy boundaries, and contract integrity.
+- [x] 7. Recommendation Engine Audit & Correction Pass:
+  - Corrected `Not My Thing` semantics: negative preference feedback propagates to reviewed media's relevant genres and tags without penalizing unrelated works or franchise connections.
+  - Eliminated false franchise links: generic theme tags (*Cyberpunk*, *Dark Fantasy*) strictly categorized as thematic vibe similarity rather than universe links.
+  - Optimized cross-media queries: reuses prefetched tags in memory, eliminating redundant SQL queries.
+  - Restricted diagnostic flag: `include_scores` safely accessible only in `DEBUG=True` mode or for authenticated staff.
+  - Added 14 new regression tests (total 44 recommendation tests), expanding full suite to **132 automated tests** passing 100% offline and deterministic in 146.0s.
 
 ---
 

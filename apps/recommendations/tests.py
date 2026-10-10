@@ -12,10 +12,9 @@ Covers:
    no remote network calls, zero star-rating audit.
 """
 
-from decimal import Decimal
 from unittest.mock import patch
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from apps.catalog.models import (
@@ -287,6 +286,106 @@ class RecommendationCrossMediaTestCase(RecommendationBaseTestCase):
         self.assertEqual(score, 0.0)
         self.assertEqual(reasons, [])
 
+    def test_shared_generic_theme_tags_do_not_fabricate_franchise_relationship(self):
+        """Shared generic theme tags (e.g. Cyberpunk, Dystopian) do NOT claim a franchise relationship."""
+        # Blade Runner 2049 and Cyberpunk 2077 share Cyberpunk and Dystopian tags
+        score, reasons = self.engine.check_cross_media_relationship(self.blade_runner, self.cyberpunk_game)
+        self.assertEqual(score, 0.0)
+        self.assertEqual(reasons, [])
+
+    def test_confirmed_franchise_identifiers_award_relationship_score(self):
+        """Explicit franchise identifier tags (e.g. franchise-batman) award full franchise score."""
+        t_batman_franchise = Tag.objects.create(name='Franchise: Batman', slug='franchise-batman')
+        self.batman.tags.add(t_batman_franchise)
+
+        batman_game = MediaItem.objects.create(
+            media_type=MediaItem.MediaType.GAME,
+            title='Batman: Arkham City',
+            slug='batman-arkham-city-2011',
+            release_year=2011
+        )
+        batman_game.tags.add(t_batman_franchise)
+        GameDetail.objects.create(media_item=batman_game, developer='Rocksteady')
+
+        score, reasons = self.engine.check_cross_media_relationship(self.batman, batman_game)
+        self.assertEqual(score, self.engine.weights.cross_media_link)
+        self.assertEqual(len(reasons), 1)
+        self.assertIn("Part of the Batman universe.", reasons[0])
+
+    def test_cross_category_verified_creator_overlap(self):
+        """Connected creator across different media types awards cross-media score."""
+        movie = MediaItem.objects.create(
+            media_type=MediaItem.MediaType.MOVIE,
+            title='Creator Movie',
+            slug='creator-movie-2023',
+            release_year=2023
+        )
+        MovieDetail.objects.create(media_item=movie, director='Hideo Kojima')
+
+        game = MediaItem.objects.create(
+            media_type=MediaItem.MediaType.GAME,
+            title='Creator Game',
+            slug='creator-game-2024',
+            release_year=2024
+        )
+        GameDetail.objects.create(media_item=game, developer='Hideo Kojima')
+
+        score, reasons = self.engine.check_cross_media_relationship(movie, game)
+        self.assertEqual(score, self.engine.weights.cross_media_link)
+        self.assertEqual(len(reasons), 1)
+        self.assertIn("Connected by shared creator (Hideo Kojima) across Movie and Video Game.", reasons[0])
+
+    def test_same_category_creator_overlap_does_not_claim_cross_media(self):
+        """Same director on two movies does not claim a cross-media adaptation relationship."""
+        movie1 = MediaItem.objects.create(
+            media_type=MediaItem.MediaType.MOVIE,
+            title='Movie One',
+            slug='movie-one-2020',
+            release_year=2020
+        )
+        MovieDetail.objects.create(media_item=movie1, director='Christopher Nolan')
+
+        movie2 = MediaItem.objects.create(
+            media_type=MediaItem.MediaType.MOVIE,
+            title='Movie Two',
+            slug='movie-two-2023',
+            release_year=2023
+        )
+        MovieDetail.objects.create(media_item=movie2, director='Christopher Nolan')
+
+        score, reasons = self.engine.check_cross_media_relationship(movie1, movie2)
+        self.assertEqual(score, 0.0)
+        self.assertEqual(reasons, [])
+
+    def test_incomplete_metadata_handled_defensively(self):
+        """Missing detail objects or empty creator strings do not raise exceptions."""
+        bare_item1 = MediaItem.objects.create(
+            media_type=MediaItem.MediaType.MOVIE,
+            title='Bare Movie',
+            slug='bare-movie-2024'
+        )
+        bare_item2 = MediaItem.objects.create(
+            media_type=MediaItem.MediaType.GAME,
+            title='Bare Game',
+            slug='bare-game-2024'
+        )
+        score, reasons = self.engine.check_cross_media_relationship(bare_item1, bare_item2)
+        self.assertEqual(score, 0.0)
+        self.assertEqual(reasons, [])
+
+    def test_no_repeated_database_queries_for_tags_in_cross_media_check(self):
+        """Passing pre-extracted tag slugs executes zero database queries."""
+        source_tags = {'cyberpunk', 'dystopian'}
+        cand_tags = {'cyberpunk', 'dystopian'}
+        with self.assertNumQueries(0):
+            score, reasons = self.engine.check_cross_media_relationship(
+                self.blade_runner,
+                self.cyberpunk_game,
+                source_tag_slugs=source_tags,
+                cand_tag_slugs=cand_tags
+            )
+        self.assertEqual(score, 0.0)
+
 
 class RecommendationPersonalizationTestCase(RecommendationBaseTestCase):
     def test_anonymous_user_receives_unfiltered_recommendations(self):
@@ -380,6 +479,163 @@ class RecommendationPersonalizationTestCase(RecommendationBaseTestCase):
 
         self.assertGreater(rec_alice_blade.total_score, rec_anon_blade.total_score)
         self.assertTrue(any('positive preference' in reason for reason in rec_alice_blade.match_reasons))
+
+    def test_not_my_thing_genres_tags_negatively_influence_related_candidate(self):
+        """Disliking an item via Not My Thing negatively influences related candidates sharing its genres/tags."""
+        # Alice reacts Not My Thing to an item with Sci-Fi genre and Cyberpunk tag
+        disliked_item = MediaItem.objects.create(
+            media_type=MediaItem.MediaType.MOVIE,
+            title='Disliked SciFi',
+            slug='disliked-scifi-2021'
+        )
+        disliked_item.genres.add(self.g_scifi)
+        disliked_item.tags.add(self.t_cyberpunk)
+
+        MediaReview.objects.create(
+            user=self.user_alice,
+            media_item=disliked_item,
+            reaction=self.rx_not_my_thing,
+            review_text="Really disliked the cyberpunk tropes."
+        )
+
+        # Source is Blade Runner 2049; Cyberpunk 2077 shares Cyberpunk tag and Sci-Fi genre (base score ~36.67)
+        recs_anon = self.engine.get_recommendations(source_item=self.blade_runner, user=None, cross_category=True)
+        recs_alice = self.engine.get_recommendations(source_item=self.blade_runner, user=self.user_alice, cross_category=True)
+
+        rec_anon_cyber = next(r for r in recs_anon if r.candidate.title == 'Cyberpunk 2077')
+        rec_alice_cyber = next(r for r in recs_alice if r.candidate.title == 'Cyberpunk 2077')
+
+        # Alice's score is penalized compared to anonymous score because Cyberpunk 2077 shares Sci-Fi and Cyberpunk
+        self.assertLess(rec_alice_cyber.total_score, rec_anon_cyber.total_score)
+        self.assertLess(rec_alice_cyber.reaction_score, 0.0)
+
+        # Furthermore, for a candidate near threshold (Blade Runner from Batman, base 17.5),
+        # the -5.0 penalty drops it below min_evidence_score (15.0), pruning it from results
+        recs_alice_from_batman = self.engine.get_recommendations(source_item=self.batman, user=self.user_alice, cross_category=True)
+        self.assertNotIn('Blade Runner 2049', [r.candidate.title for r in recs_alice_from_batman])
+
+    def test_unrelated_candidate_not_penalized_by_not_my_thing(self):
+        """Candidate that does NOT share disliked genres/tags is NOT penalized by user's Not My Thing review."""
+        # Alice reacts Not My Thing to a cozy drama
+        cozy_drama = MediaItem.objects.create(
+            media_type=MediaItem.MediaType.MOVIE,
+            title='Cozy Drama',
+            slug='cozy-drama-2022'
+        )
+        cozy_drama.genres.add(self.g_drama)
+        cozy_drama.tags.add(self.t_cozy)
+
+        MediaReview.objects.create(
+            user=self.user_alice,
+            media_item=cozy_drama,
+            reaction=self.rx_not_my_thing
+        )
+
+        recs_anon = self.engine.get_recommendations(source_item=self.batman, user=None, cross_category=True)
+        recs_alice = self.engine.get_recommendations(source_item=self.batman, user=self.user_alice, cross_category=True)
+
+        rec_anon_blade = next(r for r in recs_anon if r.candidate.title == 'Blade Runner 2049')
+        rec_alice_blade = next(r for r in recs_alice if r.candidate.title == 'Blade Runner 2049')
+
+        # Blade Runner 2049 does not share Drama or Cozy, so score is unaffected
+        self.assertEqual(rec_alice_blade.total_score, rec_anon_blade.total_score)
+        self.assertEqual(rec_alice_blade.reaction_score, 0.0)
+
+    def test_user_a_private_reactions_cannot_influence_user_b(self):
+        """User A's negative or positive reactions have zero impact on User B's recommendation scores."""
+        # Alice reacts Not My Thing to Sci-Fi
+        disliked_scifi = MediaItem.objects.create(
+            media_type=MediaItem.MediaType.MOVIE,
+            title='Alice Disliked Movie',
+            slug='alice-disliked-movie-2020'
+        )
+        disliked_scifi.genres.add(self.g_scifi)
+        MediaReview.objects.create(
+            user=self.user_alice,
+            media_item=disliked_scifi,
+            reaction=self.rx_not_my_thing
+        )
+
+        recs_anon = self.engine.get_recommendations(source_item=self.batman, user=None, cross_category=True)
+        recs_bob = self.engine.get_recommendations(source_item=self.batman, user=self.user_bob, cross_category=True)
+
+        rec_anon_blade = next(r for r in recs_anon if r.candidate.title == 'Blade Runner 2049')
+        rec_bob_blade = next(r for r in recs_bob if r.candidate.title == 'Blade Runner 2049')
+
+        # Bob has no reactions, so Bob's score is identical to anonymous score
+        self.assertEqual(rec_bob_blade.total_score, rec_anon_blade.total_score)
+        self.assertEqual(rec_bob_blade.reaction_score, 0.0)
+
+    def test_anonymous_request_independent_of_user_reactions(self):
+        """Anonymous request receives pure content-based similarity independent of all user reviews."""
+        MediaReview.objects.create(
+            user=self.user_alice,
+            media_item=self.blade_runner,
+            reaction=self.rx_peak
+        )
+        MediaReview.objects.create(
+            user=self.user_bob,
+            media_item=self.blade_runner,
+            reaction=self.rx_not_my_thing
+        )
+
+        recs_anon = self.engine.get_recommendations(source_item=self.batman, user=None, cross_category=True)
+        rec_blade = next(r for r in recs_anon if r.candidate.title == 'Blade Runner 2049')
+        # Reaction score is 0.0 (unbiased)
+        self.assertEqual(rec_blade.reaction_score, 0.0)
+
+    def test_skip_remains_strict_item_level_exclusion_only(self):
+        """Skip excludes only the specifically rejected item; other items sharing its tags are retained."""
+        # Alice skips Blade Runner 2049
+        MediaReview.objects.create(
+            user=self.user_alice,
+            media_item=self.blade_runner,
+            reaction=self.rx_skip
+        )
+
+        recs_alice = self.engine.get_recommendations(source_item=self.batman, user=self.user_alice, cross_category=True)
+        titles = [r.candidate.title for r in recs_alice]
+        # Blade Runner is excluded
+        self.assertNotIn('Blade Runner 2049', titles)
+
+        # But another candidate sharing Dystopian or Sci-Fi is NOT excluded for Alice
+        recs_alice_from_blade = self.engine.get_recommendations(source_item=self.blade_runner, user=self.user_alice, cross_category=True)
+        titles_from_blade = [r.candidate.title for r in recs_alice_from_blade]
+        self.assertIn('Cyberpunk 2077', titles_from_blade)
+
+    def test_disliking_one_work_does_not_conflate_with_disliking_franchise(self):
+        """Disliking one title in a franchise does not cancel franchise relationship points for another."""
+        t_dune = Tag.objects.create(name='Franchise: Dune', slug='franchise-dune')
+        dune_book = MediaItem.objects.create(
+            media_type=MediaItem.MediaType.MANGA,
+            title='Dune Graphic Novel',
+            slug='dune-gn-2020'
+        )
+        dune_book.genres.add(self.g_scifi, self.g_drama)
+        dune_book.tags.add(t_dune)
+
+        dune_movie = MediaItem.objects.create(
+            media_type=MediaItem.MediaType.MOVIE,
+            title='Dune Part Two',
+            slug='dune-part-two-2024'
+        )
+        dune_movie.genres.add(self.g_scifi, self.g_action)
+        dune_movie.tags.add(t_dune)
+
+        # Alice disliked the book adaptation because of Drama
+        MediaReview.objects.create(
+            user=self.user_alice,
+            media_item=dune_book,
+            reaction=self.rx_not_my_thing
+        )
+
+        # Alice asks for recommendations based on Dune Graphic Novel
+        recs_alice = self.engine.get_recommendations(source_item=dune_book, user=self.user_alice, cross_category=True)
+        rec_movie = next((r for r in recs_alice if r.candidate.title == 'Dune Part Two'), None)
+        self.assertIsNotNone(rec_movie)
+        # Retains full franchise points
+        self.assertEqual(rec_movie.cross_media_score, self.engine.weights.cross_media_link)
+        self.assertTrue(any('Dune universe' in reason for reason in rec_movie.match_reasons))
 
     def test_privacy_isolation_between_users(self):
         """Bob's private reviews and history do not affect Alice's recommendations."""
@@ -507,3 +763,27 @@ class RecommendationAPITestCase(RecommendationBaseTestCase):
             mock_urlopen.assert_not_called()
             mock_get.assert_not_called()
             mock_post.assert_not_called()
+
+    @override_settings(DEBUG=False)
+    def test_diagnostic_include_scores_restricted_in_production(self):
+        """In production (DEBUG=False), non-staff users cannot access internal similarity_score."""
+        res = self.client.get(f'/api/v1/recommendations/next/{self.batman.slug}/?include_scores=true')
+        self.assertEqual(res.status_code, 200)
+        self.assertGreater(len(res.data['recommendations']), 0)
+        for item in res.data['recommendations']:
+            self.assertNotIn('similarity_score', item)
+
+        # Staff user CAN view similarity_score in production
+        staff_user = User.objects.create_user(username='staff_admin', password='password123', is_staff=True)
+        self.client.force_authenticate(user=staff_user)
+        res_staff = self.client.get(f'/api/v1/recommendations/next/{self.batman.slug}/?include_scores=true')
+        self.assertEqual(res_staff.status_code, 200)
+        self.assertIn('similarity_score', res_staff.data['recommendations'][0])
+
+    @override_settings(DEBUG=True)
+    def test_diagnostic_include_scores_available_in_debug_mode(self):
+        """In DEBUG mode, include_scores=true exposes internal similarity_score for development."""
+        res = self.client.get(f'/api/v1/recommendations/next/{self.batman.slug}/?include_scores=true')
+        self.assertEqual(res.status_code, 200)
+        self.assertGreater(len(res.data['recommendations']), 0)
+        self.assertIn('similarity_score', res.data['recommendations'][0])

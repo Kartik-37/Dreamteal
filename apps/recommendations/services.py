@@ -43,13 +43,28 @@ class RecommendationWeights:
     min_evidence_score: float = 15.0   # Minimum total score required for inclusion
 
 
-# Known franchise/universe identifier tag slugs for cross-media relationship detection.
-# Provides a deterministic bridge pending a formal Franchise model extension.
-KNOWN_FRANCHISE_TAG_SLUGS: Set[str] = {
-    'batman', 'cyberpunk', 'witcher', 'dune', 'star-wars',
-    'lord-of-the-rings', 'middle-earth', 'marvel', 'dc',
-    'game-of-thrones', 'dragon-ball', 'one-piece', 'solo-leveling'
+# Explicit, verified franchise/universe identifier tag slugs for cross-media relationship detection.
+# Critical: Generic themes (e.g. 'cyberpunk', 'dystopian', 'dark-fantasy', 'cozy') are thematic vibe tags,
+# NOT franchises, and must never be treated as verified franchise links.
+KNOWN_FRANCHISE_IDENTIFIERS: Set[str] = {
+    'star-wars', 'middle-earth', 'lord-of-the-rings',
+    'batman-universe', 'witcher-universe', 'dune-universe',
+    'marvel-cinematic-universe', 'dc-universe', 'game-of-thrones-universe',
+    'dragon-ball-universe', 'one-piece-universe', 'solo-leveling-universe'
 }
+
+
+@dataclass
+class UserPreferenceSignals:
+    """
+    Authenticated requesting user's qualitative reaction history.
+    Strictly isolated to the requesting user; never shared across users or leaked anonymously.
+    """
+    preferred_genres: Set[str] = field(default_factory=set)
+    preferred_tags: Set[str] = field(default_factory=set)
+    disliked_genres: Set[str] = field(default_factory=set)
+    disliked_tags: Set[str] = field(default_factory=set)
+    not_my_thing_media_ids: Set[UUID] = field(default_factory=set)
 
 
 @dataclass
@@ -115,12 +130,9 @@ class RecommendationEngine:
         )
 
         # 3. Pre-fetch user preference signals if authenticated
-        user_preferred_genres: Set[str] = set()
-        user_preferred_tags: Set[str] = set()
-        user_rejected_media_ids: Set[UUID] = set()
-
+        user_preferences: Optional[UserPreferenceSignals] = None
         if user and user.is_authenticated:
-            user_preferred_genres, user_preferred_tags, user_rejected_media_ids = self._get_user_preferences(user)
+            user_preferences = self._get_user_preferences(user)
 
         # 4. Score each candidate
         scored_candidates: List[ScoredRecommendation] = []
@@ -133,9 +145,7 @@ class RecommendationEngine:
                 source_genre_names=source_genre_names,
                 source_tag_slugs=source_tag_slugs,
                 source_tag_names=source_tag_names,
-                user_preferred_genres=user_preferred_genres,
-                user_preferred_tags=user_preferred_tags,
-                user_rejected_media_ids=user_rejected_media_ids
+                user_preferences=user_preferences
             )
             # Only retain candidates meeting the minimum evidence threshold and with valid explanations
             if rec.total_score >= self.weights.min_evidence_score and rec.match_reasons:
@@ -245,33 +255,41 @@ class RecommendationEngine:
 
         return qs
 
-    def _get_user_preferences(self, user: AbstractBaseUser) -> Tuple[Set[str], Set[str], Set[UUID]]:
+    def _get_user_preferences(self, user: AbstractBaseUser) -> UserPreferenceSignals:
         """
-        Retrieves user's demonstrated positive qualitative reaction history
-        to bias recommendations toward genres and vibes they genuinely enjoy.
+        Retrieves user's demonstrated positive and negative qualitative reaction history.
+        - Positive reviews (Peak, Loved It, Good Time): genres and tags user enjoys.
+        - Negative reviews (Not My Thing): genres and tags of disliked works provide negative preference signals.
+        Strictly owner-scoped to the authenticated user; never queries or leaks other users' records.
         """
+        signals = UserPreferenceSignals()
+
         # User's positive reviews: Peak, Loved It, Good Time
         positive_reviews = MediaReview.objects.filter(
             user=user,
             reaction__key__in=['peak', 'loved_it', 'good_time']
         ).select_related('media_item').prefetch_related('media_item__genres', 'media_item__tags')
 
-        preferred_genres: Set[str] = set()
-        preferred_tags: Set[str] = set()
-
         for rev in positive_reviews:
             for g in rev.media_item.genres.all():
-                preferred_genres.add(g.slug)
+                signals.preferred_genres.add(g.slug)
             for t in rev.media_item.tags.all():
-                preferred_tags.add(t.slug)
+                signals.preferred_tags.add(t.slug)
 
-        # Not My Thing verdicts (negative preference signal)
-        nmt_media_ids = set(MediaReview.objects.filter(
+        # User's negative preference reviews: Not My Thing
+        nmt_reviews = MediaReview.objects.filter(
             user=user,
             reaction__key='not_my_thing'
-        ).values_list('media_item_id', flat=True))
+        ).select_related('media_item').prefetch_related('media_item__genres', 'media_item__tags')
 
-        return preferred_genres, preferred_tags, nmt_media_ids
+        for rev in nmt_reviews:
+            signals.not_my_thing_media_ids.add(rev.media_item_id)
+            for g in rev.media_item.genres.all():
+                signals.disliked_genres.add(g.slug)
+            for t in rev.media_item.tags.all():
+                signals.disliked_tags.add(t.slug)
+
+        return signals
 
     def _score_candidate(
         self,
@@ -281,9 +299,7 @@ class RecommendationEngine:
         source_genre_names: Dict[str, str],
         source_tag_slugs: Set[str],
         source_tag_names: Dict[str, str],
-        user_preferred_genres: Set[str],
-        user_preferred_tags: Set[str],
-        user_rejected_media_ids: Set[UUID]
+        user_preferences: Optional[UserPreferenceSignals] = None
     ) -> ScoredRecommendation:
         """Computes multi-signal similarity score and generates explainable match reasons."""
         cand_genre_slugs, cand_genre_names = self._extract_genres(candidate)
@@ -333,7 +349,12 @@ class RecommendationEngine:
         # -------------------------------------------------------------
         # Signal 3: Cross-Media & Franchise Relationship (Weight: cross_media_link)
         # -------------------------------------------------------------
-        cross_media_score, cross_media_reasons = self.check_cross_media_relationship(source_item, candidate)
+        cross_media_score, cross_media_reasons = self.check_cross_media_relationship(
+            source=source_item,
+            candidate=candidate,
+            source_tag_slugs=source_tag_slugs,
+            cand_tag_slugs=cand_tag_slugs
+        )
         match_reasons.extend(cross_media_reasons)
 
         # -------------------------------------------------------------
@@ -341,20 +362,35 @@ class RecommendationEngine:
         # -------------------------------------------------------------
         reaction_score = 0.0
 
-        # User personal affinity
-        if user_rejected_media_ids and candidate.id in user_rejected_media_ids:
-            # User previously reacted Not My Thing to this item
-            reaction_score -= 10.0
-        else:
-            # User preference alignment in candidate's genres/tags
-            user_shared_p_tags = cand_tag_slugs & user_preferred_tags
-            user_shared_p_genres = cand_genre_slugs & user_preferred_genres
+        # User personal affinity (strictly for requesting user)
+        if user_preferences:
+            # 1. Candidate directly reviewed as Not My Thing by user
+            if candidate.id in user_preferences.not_my_thing_media_ids:
+                reaction_score -= 10.0
+
+            # 2. Positive preference alignment from Peak, Loved It, Good Time
+            user_shared_p_tags = cand_tag_slugs & user_preferences.preferred_tags
+            user_shared_p_genres = cand_genre_slugs & user_preferences.preferred_genres
             if user_shared_p_tags or user_shared_p_genres:
-                user_bonus = min(self.weights.reaction_affinity * 0.5, (len(user_shared_p_tags) * 3.0 + len(user_shared_p_genres) * 2.0))
+                user_bonus = min(
+                    self.weights.reaction_affinity * 0.5,
+                    (len(user_shared_p_tags) * 3.0 + len(user_shared_p_genres) * 2.0)
+                )
                 reaction_score += user_bonus
                 if user_shared_p_tags:
                     p_tag_name = cand_tag_names[next(iter(user_shared_p_tags))]
                     match_reasons.append(f"Matches your positive preference for {p_tag_name}.")
+
+            # 3. Negative preference feedback from Not My Thing on candidate's genres/tags
+            # Only penalize tags/genres that user disliked and does NOT also have as a positive preference
+            net_disliked_tags = (cand_tag_slugs & user_preferences.disliked_tags) - user_preferences.preferred_tags
+            net_disliked_genres = (cand_genre_slugs & user_preferences.disliked_genres) - user_preferences.preferred_genres
+            if net_disliked_tags or net_disliked_genres:
+                disliked_penalty = min(
+                    self.weights.reaction_affinity * 0.5,
+                    (len(net_disliked_tags) * 3.0 + len(net_disliked_genres) * 2.0)
+                )
+                reaction_score -= disliked_penalty
 
         # Community qualitative verdict consensus
         community_score, comm_reason = self._compute_community_reaction_score(candidate)
@@ -379,30 +415,46 @@ class RecommendationEngine:
     def check_cross_media_relationship(
         self,
         source: MediaItem,
-        candidate: MediaItem
+        candidate: MediaItem,
+        source_tag_slugs: Optional[Set[str]] = None,
+        cand_tag_slugs: Optional[Set[str]] = None
     ) -> Tuple[float, List[str]]:
         """
         Detects verified franchise or cross-media relationship.
         Evaluates explicit shared universe/franchise tags and creator overlap across media.
-        Serves as an extension point for a future explicit Franchise relation.
+        Reuses prefetched tag slugs to avoid repeated database queries.
         """
         score = 0.0
         reasons: List[str] = []
 
         # 1. Check for shared franchise/universe tags
-        source_tags = set(source.tags.values_list('slug', flat=True))
-        cand_tags = set(candidate.tags.values_list('slug', flat=True))
-        shared = source_tags & cand_tags
+        if source_tag_slugs is None:
+            source_tag_slugs = {t.slug for t in source.tags.all()}
+        if cand_tag_slugs is None:
+            cand_tag_slugs = {t.slug for t in candidate.tags.all()}
+
+        shared = source_tag_slugs & cand_tag_slugs
 
         for tag_slug in shared:
-            if tag_slug in KNOWN_FRANCHISE_TAG_SLUGS or tag_slug.startswith('franchise-') or tag_slug.startswith('universe-'):
+            if (
+                tag_slug in KNOWN_FRANCHISE_IDENTIFIERS
+                or tag_slug.startswith('franchise-')
+                or tag_slug.startswith('universe-')
+                or tag_slug.startswith('franchise:')
+            ):
                 score += self.weights.cross_media_link
-                clean_name = tag_slug.replace('franchise-', '').replace('universe-', '').replace('-', ' ').title()
+                clean_name = (
+                    tag_slug.replace('franchise-', '')
+                    .replace('universe-', '')
+                    .replace('franchise:', '')
+                    .replace('-universe', '')
+                    .replace('-', ' ')
+                    .title()
+                )
                 reasons.append(f"Part of the {clean_name} universe.")
                 return score, reasons
 
         # 2. Check for creator overlap across media formats
-        # E.g., Movie director who authored manga, or director who created game
         source_creators = self._get_creator_names(source)
         cand_creators = self._get_creator_names(candidate)
 
@@ -410,30 +462,44 @@ class RecommendationEngine:
         if shared_creators and source.media_type != candidate.media_type:
             creator_name = next(iter(shared_creators))
             score += self.weights.cross_media_link
-            reasons.append(f"Connected by shared creator ({creator_name}) across {source.get_media_type_display()} and {candidate.get_media_type_display()}.")
+            reasons.append(
+                f"Connected by shared creator ({creator_name.title()}) across "
+                f"{source.get_media_type_display()} and {candidate.get_media_type_display()}."
+            )
 
         return score, reasons
 
     def _get_creator_names(self, item: MediaItem) -> Set[str]:
         """Extracts normalized creator names across media type extensions."""
         creators = set()
-        if hasattr(item, 'movie_detail') and item.movie_detail and item.movie_detail.director:
-            creators.add(item.movie_detail.director.strip().lower())
-        if hasattr(item, 'series_detail') and item.series_detail and item.series_detail.creators:
-            creators.add(item.series_detail.creators.strip().lower())
-        if hasattr(item, 'manga_detail') and item.manga_detail:
-            if item.manga_detail.author:
-                creators.add(item.manga_detail.author.strip().lower())
-            if item.manga_detail.artist:
-                creators.add(item.manga_detail.artist.strip().lower())
-        if hasattr(item, 'game_detail') and item.game_detail and item.game_detail.developer:
-            creators.add(item.game_detail.developer.strip().lower())
+        invalid_names = {'', 'unknown', 'various', 'n/a', 'none'}
+
+        def _clean_and_add(val: Optional[str]):
+            if val:
+                cleaned = val.strip().lower()
+                if cleaned and len(cleaned) >= 3 and cleaned not in invalid_names:
+                    creators.add(cleaned)
+
+        try:
+            if item.media_type == MediaItem.MediaType.MOVIE and hasattr(item, 'movie_detail') and item.movie_detail:
+                _clean_and_add(item.movie_detail.director)
+            elif item.media_type == MediaItem.MediaType.SERIES and hasattr(item, 'series_detail') and item.series_detail:
+                _clean_and_add(item.series_detail.creators)
+            elif item.media_type == MediaItem.MediaType.MANGA and hasattr(item, 'manga_detail') and item.manga_detail:
+                _clean_and_add(item.manga_detail.author)
+                _clean_and_add(item.manga_detail.artist)
+            elif item.media_type == MediaItem.MediaType.GAME and hasattr(item, 'game_detail') and item.game_detail:
+                _clean_and_add(item.game_detail.developer)
+        except Exception:
+            pass
+
         return creators
 
     def _compute_community_reaction_score(self, candidate: MediaItem) -> Tuple[float, Optional[str]]:
         """
         Computes bonus for candidates with positive qualitative community verdicts.
         Uses pure qualitative reaction counts (Peak and Loved It) without any numeric averages.
+        Requires a meaningful sample size (total >= 3) to prevent unsupported claims.
         """
         # Count public qualitative verdicts
         public_reviews = MediaReview.objects.filter(media_item=candidate, is_public=True)
@@ -443,19 +509,18 @@ class RecommendationEngine:
             loved_it=Count('id', filter=Q(reaction__key='loved_it'))
         )
         total = counts.get('total') or 0
-        if total == 0:
+        if total < 3:
+            # Insufficient community evidence sample
             return 0.0, None
 
         positive_count = (counts.get('peak') or 0) + (counts.get('loved_it') or 0)
         positive_ratio = positive_count / total
 
-        # Confidence scaling dampener: items with 3+ reviews get full confidence
-        dampener = min(1.0, total / 3.0)
-        bonus = (self.weights.reaction_affinity * 0.5) * positive_ratio * dampener
+        bonus = (self.weights.reaction_affinity * 0.5) * positive_ratio
 
         reason = None
-        if positive_ratio >= 0.65 and total >= 2:
-            reason = "Highly praised with community Peak and Loved It reactions."
+        if positive_ratio >= 0.70:
+            reason = "Received strong community Peak and Loved It qualitative reactions."
 
         return round(bonus, 2), reason
 

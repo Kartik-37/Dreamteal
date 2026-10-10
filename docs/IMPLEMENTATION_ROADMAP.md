@@ -90,9 +90,13 @@ Implement backend data foundations in strict verified order:
   - DRF query serialization with bounded limit (1-50, default 10) and controlled 400 error responses on invalid parameters.
   - Returns 404 on unknown base media slug.
   - Single-query candidate prefetching (`select_related`, `prefetch_related`) eliminating N+1 database queries.
-- [x] 6. Automated Testing & Verification
-  - 30 new tests in `apps/recommendations/tests.py` covering similarity, cross-media, personalization, privacy, contract integrity, zero star ratings, and offline guarantees.
-  - Full suite expanded to 118 automated tests passing 100% offline.
+- [x] 6. Automated Testing, Audit & Verification Pass
+  - Corrected `Not My Thing` semantics: negative preference feedback propagates to reviewed media's relevant genres and tags without penalizing unrelated works or franchise connections.
+  - Eliminated false franchise links: generic theme tags (*Cyberpunk*, *Dark Fantasy*) strictly categorized as thematic vibe similarity rather than universe links.
+  - Optimized cross-media queries: reuses prefetched tags in memory, eliminating redundant SQL queries.
+  - Restricted diagnostic flag: `include_scores` safely accessible only in `DEBUG=True` mode or for authenticated staff.
+  - 44 comprehensive tests in `apps/recommendations/tests.py` covering all similarity, cross-media, personalization, privacy, contract integrity, zero star ratings, and offline guarantees.
+  - Full suite expanded to **132 automated tests** passing 100% offline and deterministic.
 
 ---
 
