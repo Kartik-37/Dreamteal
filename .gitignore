@@ -22,8 +22,8 @@ ENV/
 db.sqlite3
 *.sqlite3
 db.sqlite3-journal
-media/
-staticfiles/
+/media/
+/staticfiles/
 
 # Frontend (React / Vite)
 node_modules/

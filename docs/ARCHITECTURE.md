@@ -153,3 +153,40 @@ Serialized Response Envelope: Base Media + Recommended Items (UUID, slug, title,
 6. **Explainable Match Reasons**: Every returned item includes transparent, human-readable match explanations supported strictly by actual catalog overlaps.
 7. **Deterministic Tie-Breaking**: Ranks are sorted by `(-total_score, -shared_tags_count, -shared_genres_count, -release_year, title.lower(), str(id))`, ensuring identical output for identical database states.
 8. **Safe Franchise vs Thematic Distinction**: Generic thematic tags (*Cyberpunk*, *Dark Fantasy*, *Dystopian*) are treated strictly as thematic vibe similarity, while explicit verified identifiers (`franchise-*`, `universe-*`, specific IP universe tags) or verified cross-medium creator overlap represent franchise links.
+
+---
+
+## 8. Frontend Architecture & Boundaries [APPROVED & IMPLEMENTED]
+
+```text
+Browser Client (React 18 + Vite + Tailwind CSS)
+  ├── UI & Reusable Component Library (src/components/)
+  │     ├── Layout Shell: AppLayout, Navbar, Footer
+  │     ├── Media Presentation: MediaPosterCard, MediaPosterGrid, MediaBackdrop, MediaMetadata, MediaSkeleton
+  │     ├── Reactions & Tracking: ReactionBadge, ReactionSelector, MediaStatusBadge, ProgressIndicator
+  │     ├── Feedback: EmptyState, ErrorMessage, LoadingSpinner, Skeleton
+  │     └── UI Primitives: Button, Modal, AuthModal
+  ├── Application Routing & State (src/app/, src/features/auth/)
+  │     ├── Router: createBrowserRouter (React Router v6)
+  │     └── AuthProvider / useAuth: Session-based auth state (user, isAuthenticated, loading, login, logout)
+  └── Centralized API Service Layer (src/services/)
+        ├── api.js: Base client, credentials: 'include', CSRF auto-fetch & header attachment (X-CSRFToken), normalized ApiError
+        ├── authService: /api/v1/users/csrf/, /api/v1/users/login/, /api/v1/users/logout/, /api/v1/users/me/
+        ├── catalogService: /api/v1/media/, /api/v1/media/<slug>/, /api/v1/media/search/, /api/v1/discovery/<category>/
+        ├── trackingService: /api/v1/tracking/status/, /api/v1/tracking/progress/, /api/v1/tracking/logs/
+        ├── reviewService: /api/v1/reviews/reactions/, /api/v1/reviews/
+        └── recommendationService: /api/v1/recommendations/next/<slug>/
+              │
+              ▼ (Vite Proxy: /api -> http://127.0.0.1:8000)
+Django REST API Backend (drf)
+  ├── SessionAuthentication (HTTP-only sessionid cookie)
+  ├── CSRF Enforcement (csrftoken cookie + X-CSRFToken header)
+  └── SQLite / PostgreSQL Database
+```
+
+### Architectural Guarantees & Boundaries:
+1. **Frontend Isolation**: React frontend never talks to external providers (TMDB, RAWG, AniList, Jikan). All external calls are mediated by Django backend services.
+2. **Session Authentication & Security**: Session state is preserved exclusively through Django's secure HTTP-only cookies. No imitation tokens or passwords are stored in localStorage or client storage.
+3. **CSRF Lifecycle**: Unsafe requests (`POST`, `PUT`, `PATCH`, `DELETE`) automatically verify CSRF token existence, fetch from `GET /api/v1/users/csrf/` if needed, and attach `X-CSRFToken`.
+4. **Normalized Error Handling**: API errors are caught and surfaced via `ApiError` with HTTP status, field validation arrays, network status, and auth flags without exposing server tracebacks or secrets.
+5. **Zero Star Ratings Guarantee**: Star ratings, numeric scores, and fake average ratings are strictly excluded across all component props, utility functions, CSS tokens, and tests.

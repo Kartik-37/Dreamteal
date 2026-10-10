@@ -100,10 +100,29 @@ Implement backend data foundations in strict verified order:
 
 ---
 
-### Phase 4: Frontend Foundation & Component Library
-- [ ] Set up React (Vite) + Tailwind CSS app structure.
-- [ ] Create UI Design System primitives (Color palette, dark background, poster cards, badge components, navigation bar).
-- [ ] Integrate API service layer (`src/services/api.js`).
+### Phase 4: Frontend Foundation & Component Library (COMPLETED & VERIFIED)
+- [x] Set up React 18 + Vite + Tailwind CSS app structure under `frontend/` with PostCSS and Autoprefixer.
+- [x] Configure Vite development proxy (`/api` -> `http://127.0.0.1:8000`) and documented `.env.example`.
+- [x] Implement Design System Tokens in `tokens.css` and `tailwind.config.js`:
+  - Dark surfaces (`#0b0c10`, `#121318`, `#1a1c23`, `#222530`).
+  - Approved text-based reaction tokens: Peak (Electric Gold `#f59e0b`), Loved It (Warm Coral `#fb7185`), Good Time (Radiant Teal `#14b8a6`), Not My Thing (Muted Lavender `#a78bfa`), Skip (Crimson `#e11d48`).
+  - Strict zero-star policy: zero star symbols, zero numeric rating scales.
+- [x] Implement Reusable Component Library:
+  - Application Shell: `Navbar` (desktop & responsive mobile menu), `Footer`, `AppLayout`.
+  - Media Presentation: `MediaPosterCard` (with aspect ratios and missing poster image fallbacks), `MediaPosterGrid`, `MediaBackdrop`, `MediaMetadata`, `MediaCategoryLabel`, `MediaSkeleton`.
+  - Reactions & Tracking: `ReactionBadge`, `ReactionSelector`, `MediaStatusBadge`, `ProgressIndicator`.
+  - Feedback: `LoadingSpinner`, `Skeleton`, `EmptyState`, `ErrorMessage`.
+  - UI Primitives: `Button`, `Modal`, `AuthModal`.
+- [x] Implement Centralized API Client & Service Layer:
+  - `api.js`: Session cookies (`credentials: 'include'`), CSRF auto-fetch from `/api/v1/users/csrf/`, `X-CSRFToken` attachment for unsafe methods (`POST`, `PUT`, `PATCH`, `DELETE`), normalized `ApiError`.
+  - Service modules: `auth.js`, `catalog.js`, `tracking.js`, `reviews.js`, `recommendations.js`.
+  - Session Auth Context: `AuthProvider` & `useAuth` hook managing authenticated session and profile state.
+- [x] Implement Minimal Foundation Demonstration Screen (`FoundationDemoPage.jsx` at route `/`):
+  - Validates app shell, category pills, local fixtures / live API toggle, interactive reaction selector, state simulations (loading, empty, error), and media inspection modal.
+- [x] Automated Component & Build Verification:
+  - 22 Vitest tests across 5 test suites (`components.test.js`, `constants.test.js`, `apiClient.test.js`, `services.test.js`, `app.test.jsx`).
+  - Production bundle compilation via `npm run build` passing with zero warnings in ~5.0s.
+  - Django backend test suite passing 132/132 tests offline.
 
 ---
 

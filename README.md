@@ -124,19 +124,56 @@ The Django REST API will be available at `http://127.0.0.1:8000/`.
 
 ---
 
+## 💻 Frontend Setup & Component Library (React + Vite + Tailwind CSS)
+
+DreamTeal includes a dedicated React application in `frontend/` powered by Vite, Tailwind CSS, and React Router.
+
+### 1. Install Frontend Dependencies
+```bash
+cd frontend
+npm install
+```
+
+### 2. Configure Environment
+```bash
+cp .env.example .env
+```
+In local development, `VITE_API_BASE_URL` can be left blank because the Vite dev server automatically proxies `/api` requests to `http://127.0.0.1:8000`.
+
+### 3. Run the Frontend Development Server
+```bash
+npm run dev
+```
+The frontend application will be available at `http://localhost:5173/`.
+
+### 4. Build the Frontend Production Bundle
+```bash
+npm run build
+```
+
+---
+
 ## 🧪 Testing
 
-DreamTeal enforces a strict distinction between offline unit testing and live network checks:
+DreamTeal enforces strict, deterministic testing across both backend and frontend:
 
-### 1. Deterministic Offline Test Suite (Primary)
+### 1. Backend Deterministic Test Suite (Django)
 ```bash
 python manage.py test
 ```
-- **100% Offline**: All external provider communications (TMDB, AniList, Jikan, RAWG) are mocked using deterministic `unittest.mock` fixtures.
-- Covers data models, category-specific extensions, auto-sync, non-reversal rules, deduplication, search interleaving, query validation, CSRF enforcement, and zero-star audits.
-- Current Status: **132/132 tests passing cleanly in ~146s**.
+- **100% Offline**: All external provider communications (TMDB, AniList, Jikan, RAWG) are mocked using deterministic fixtures.
+- Covers data models, category-specific extensions, auto-sync, non-reversal rules, deduplication, search interleaving, query validation, CSRF enforcement, deterministic recommendations, and zero-star audits.
+- Current Status: **132/132 tests passing cleanly**.
 
-### 2. Optional Live Provider Connectivity Check
+### 2. Frontend Component & API Test Suite (Vitest)
+```bash
+cd frontend
+npm test
+```
+- Runs Vitest component rendering, prop verification, qualitative reaction badge checks, zero-star enforcement, and central API client CSRF attachment checks.
+- Current Status: **22/22 tests passing across 5 test files**.
+
+### 3. Optional Live Provider Connectivity Check
 ```bash
 python manage.py test_external_providers
 ```
