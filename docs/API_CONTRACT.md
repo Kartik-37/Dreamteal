@@ -356,24 +356,47 @@ This document defines the REST API endpoints provided by the Django backend. All
 
 ---
 
-## 7. Recommendation Endpoints
+## 7. Recommendation Endpoints [APPROVED & IMPLEMENTED]
 
 ### `GET /api/v1/recommendations/next/<slug>/`
-- **Description**: Get "What to consume next" recommendations based on a given media item using deterministic matching.
-- **Query Params**:
-  - `cross_category`: `true` | `false`
+- **Description**: Get deterministic, explainable "What to consume next" recommendations based on a given media item.
+- **Permissions**: `AllowAny` (supports both anonymous discovery and authenticated personalization).
+- **Query Params** (Validated with `RecommendationQuerySerializer`):
+  - `cross_category`: `true` | `false` (default: `true`)
+  - `category`: `MOVIE` | `SERIES` | `MANGA` | `MANHWA` | `GAME` (optional)
+  - `limit`: Integer from `1` to `50` (default: `10`)
+  - `include_scores`: `true` | `false` (development diagnostic option, default: `false`)
 - **Response Payload (200 OK)**:
   ```json
   {
-    "base_media": "The Batman",
+    "base_media": {
+      "id": "aa5e8458-344b-4f0d-84cd-c0f0bfae4e8f",
+      "slug": "severance-2022",
+      "title": "Severance",
+      "media_type": "SERIES"
+    },
     "recommendations": [
       {
-        "id": "uuid-9999",
+        "id": "bb9f1234-5678-4a1b-9c2d-3e4f5a6b7c8d",
+        "slug": "cyberpunk-2077-2020",
         "title": "Cyberpunk 2077",
         "media_type": "GAME",
-        "match_reason": "Matches dark neo-noir vibe & crime thriller themes",
-        "poster_url": "/media/posters/cyberpunk.jpg"
+        "poster_url": "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=500",
+        "release_year": 2020,
+        "match_reasons": [
+          "Shares the Dystopian theme.",
+          "Shares the Sci-Fi genre."
+        ]
       }
-    ]
+    ],
+    "count": 1,
+    "filters": {
+      "cross_category": true,
+      "category": null,
+      "limit": 10
+    }
   }
   ```
+- **Error Responses**:
+  - `404 Not Found`: If `base_media` slug does not exist (`{"detail": "No MediaItem matches the given query."}`).
+  - `400 Bad Request`: If query parameters are invalid (e.g., negative limit, invalid category choice).

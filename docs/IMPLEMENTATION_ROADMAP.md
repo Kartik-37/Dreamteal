@@ -69,10 +69,30 @@ Implement backend data foundations in strict verified order:
 
 ---
 
-### Phase 3: Recommendation Engine Implementation
-- [ ] Build similarity scoring algorithm service (`RecommendationEngine`).
-- [ ] Implement `GET /api/v1/recommendations/next/<slug>/` endpoint.
-- [ ] Test cross-media recommendation logic (e.g. matching Anime/Manga to Video Games).
+### Phase 3: Recommendation Engine Implementation (COMPLETED & VERIFIED)
+- [x] 1. Configurable Rule-Based Scoring Engine (`apps.recommendations.services.RecommendationEngine`)
+  - Multi-signal scoring with normalized Jaccard similarity for Tags (40.0) and Genres (30.0).
+  - Cross-media franchise adapter detection (15.0).
+  - User reaction affinity bonus (15.0 for Peak, Loved It, Good Time; penalty for Not My Thing).
+  - Strict minimum evidence threshold (`min_evidence_score = 15.0`) filtering out weak single-genre coincidences.
+  - Deterministic tie-breaking ordering (`-total_score`, `-shared_tags`, `-shared_genres`, `-release_year`, `title.lower()`, `str(id)`).
+- [x] 2. Transparent Human-Readable Match Explanation Generator
+  - Generates honest, data-backed match rationales ("Shares Cyberpunk and Dystopian tags", "Shares Action and Mystery genres", "Connected by verified franchise or adaptation relationship").
+- [x] 3. Personalization & Privacy Scoping
+  - Excludes media tracked as `WATCHED`, `COMPLETED`, `FINISHED`, `WATCHING`, `READING`, `PLAYING`, `DROPPED`, `PAUSED`, or logged in `DiaryLog`.
+  - Retains backlog candidates (`PLAN_TO_WATCH`, `BACKLOG`) for next-to-consume discovery.
+  - Excludes items reviewed with `Skip`.
+  - Strictly isolates user data: anonymous requests receive unbiased catalog similarity; private reviews/diaries of other users are never exposed.
+- [x] 4. Cross-Media & Subtype Filtering
+  - Supports both cross-category matches (`cross_category=True`) and same-medium discovery (`cross_category=False`).
+  - Implements category filtering (`category=MOVIE|SERIES|MANGA|MANHWA|GAME`) with subtype discrimination (e.g. Manhwa country of origin KR).
+- [x] 5. REST API Endpoint (`GET /api/v1/recommendations/next/<slug>/`)
+  - DRF query serialization with bounded limit (1-50, default 10) and controlled 400 error responses on invalid parameters.
+  - Returns 404 on unknown base media slug.
+  - Single-query candidate prefetching (`select_related`, `prefetch_related`) eliminating N+1 database queries.
+- [x] 6. Automated Testing & Verification
+  - 30 new tests in `apps/recommendations/tests.py` covering similarity, cross-media, personalization, privacy, contract integrity, zero star ratings, and offline guarantees.
+  - Full suite expanded to 118 automated tests passing 100% offline.
 
 ---
 

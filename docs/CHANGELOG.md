@@ -2,6 +2,26 @@
 
 All notable changes to the DreamTeal project specifications and codebase will be documented in this file.
 
+## [0.5.0-alpha] - 2026-10-10
+### Added (Phase 3 Deterministic Recommendation Engine)
+- **Configurable Rule-Based Recommendation Engine**: Built `RecommendationEngine` in `apps/recommendations/services.py` with multi-signal scoring:
+  - Normalized Jaccard similarity for Tag/vibe overlap (provisional weight: 40.0).
+  - Normalized Jaccard similarity for Genre overlap (provisional weight: 30.0).
+  - Cross-media franchise adapter detection (provisional weight: 15.0).
+  - User reaction affinity bonus/penalty (provisional weight: 15.0 for Peak, Loved It, Good Time; penalty for Not My Thing).
+  - Minimum evidence threshold (`min_evidence_score=15.0`) eliminating weak coincidental matches.
+  - Deterministic tie-breaking ordering (`-total_score`, `-shared_tags_count`, `-shared_genres_count`, `-release_year`, `title.lower()`, `str(id)`).
+- **Human-Readable Match Explanations**: Generates transparent, data-supported explanations ("Shares Cyberpunk and Dystopian tags", "Shares Action and Mystery genres", "Connected by verified franchise or adaptation relationship") derived directly from matched catalog attributes.
+- **Personalization & Privacy Safeguards**:
+  - Excludes already consumed media (`WATCHED`, `COMPLETED`, `FINISHED`, `WATCHING`, `READING`, `PLAYING`, `DROPPED`, `PAUSED`, or logged in `DiaryLog`).
+  - Retains backlog candidates (`PLAN_TO_WATCH`, `BACKLOG`) for next-to-consume discovery.
+  - Excludes media reviewed with `Skip`.
+  - Respects strict user privacy boundaries: anonymous users receive unbiased catalog similarity; private reviews/diaries of other users are never exposed in personalized recommendations.
+- **Cross-Media & Subtype Support**: Full support for cross-category discovery (Movie $\rightarrow$ Game, Series $\rightarrow$ Manga, Game $\rightarrow$ Movie) with toggleable `cross_category` query parameter and category filtering (`category=MOVIE|SERIES|MANGA|MANHWA|GAME`) respecting Manga vs Manhwa distinctions.
+- **Next Recommendations API Endpoint**: Implemented `GET /api/v1/recommendations/next/<slug>/` with DRF query validation, bounded limits (1-50, default 10), 404 for unknown slugs, 400 for invalid query parameters, and developer-only diagnostic `include_scores` flag.
+- **Query Optimization**: Implemented single-query candidate prefetching (`select_related`, `prefetch_related`) eliminating N+1 database queries.
+- **Automated Offline Test Suite**: Added 30 comprehensive tests in `apps/recommendations/tests.py`, expanding the automated test suite to **118 tests** passing 100% offline and deterministic in ~112s.
+
 ---
 
 ## [0.4.3-alpha] - 2026-10-10

@@ -25,5 +25,6 @@ urlpatterns = [
     path('api/v1/', include('apps.tracking.urls')),
     path('api/v1/', include('apps.reviews.urls')),
     path('api/v1/', include('apps.users.urls')),
+    path('api/v1/', include('apps.recommendations.urls')),
 ]
 

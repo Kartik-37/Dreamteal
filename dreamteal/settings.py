@@ -71,6 +71,7 @@ INSTALLED_APPS = [
     'apps.tracking.apps.TrackingConfig',
     'apps.reviews.apps.ReviewsConfig',
     'apps.users.apps.UsersConfig',
+    'apps.recommendations.apps.RecommendationsConfig',
 ]
 
 MIDDLEWARE = [
