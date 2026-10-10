@@ -261,3 +261,85 @@ class ReviewsAPITestCase(TestCase):
         res_other_pub = other_client.get(f'/api/v1/reviews/{private_review.id}/')
         self.assertEqual(res_other_pub.status_code, 200)
 
+    def test_review_list_privacy_and_media_id_filtering(self):
+        """
+        Verifies review list endpoint:
+        - Anonymous user only sees public reviews.
+        - Other user only sees public reviews.
+        - Owner sees both public reviews and their own private reviews.
+        - Filtering by media_id or media parameter works cleanly with UUIDs.
+        """
+        user_c = User.objects.create_user(username='charlie', password='password123')
+        # Public review by Charlie
+        MediaReview.objects.create(
+            user=user_c,
+            media_item=self.movie,
+            reaction=self.rx_loved_it,
+            review_text="Charlie public review",
+            is_public=True
+        )
+        # Private review by self.user
+        MediaReview.objects.create(
+            user=self.user,
+            media_item=self.movie,
+            reaction=self.rx_not_my_thing,
+            review_text="Self private review",
+            is_public=False
+        )
+
+        # 1. Anonymous GET with ?media_id=<uuid>
+        anon_client = APIClient()
+        res_anon = anon_client.get(f'/api/v1/reviews/?media_id={self.movie.id}')
+        self.assertEqual(res_anon.status_code, 200)
+        anon_texts = [r['review_text'] for r in res_anon.data['results']]
+        self.assertIn("Charlie public review", anon_texts)
+        self.assertNotIn("Self private review", anon_texts)
+
+        # 2. Charlie GET with ?media=<uuid>
+        c_client = APIClient()
+        c_client.force_authenticate(user=user_c)
+        res_c = c_client.get(f'/api/v1/reviews/?media={self.movie.id}')
+        self.assertEqual(res_c.status_code, 200)
+        c_texts = [r['review_text'] for r in res_c.data['results']]
+        self.assertIn("Charlie public review", c_texts)
+        self.assertNotIn("Self private review", c_texts)
+
+        # 3. Owner GET with ?media_id=<uuid> sees both
+        res_owner = self.client.get(f'/api/v1/reviews/?media_id={self.movie.id}')
+        self.assertEqual(res_owner.status_code, 200)
+        owner_texts = [r['review_text'] for r in res_owner.data['results']]
+        self.assertIn("Charlie public review", owner_texts)
+        self.assertIn("Self private review", owner_texts)
+
+    def test_review_create_patch_with_media_id_and_reaction_key(self):
+        """Verifies review creation and patching using media_id and reaction_key aliases."""
+        movie2 = MediaItem.objects.create(
+            media_type='MOVIE',
+            title='Interstellar',
+            slug='interstellar-2014',
+            release_year=2014
+        )
+
+        res_create = self.client.post('/api/v1/reviews/', {
+            'media_id': str(movie2.id),
+            'reaction_key': 'peak',
+            'review_text': 'Fascinating linguistic sci-fi.',
+            'contains_spoilers': False,
+            'is_public': True
+        }, format='json')
+        self.assertEqual(res_create.status_code, 201)
+        self.assertEqual(res_create.data['reaction_key'], 'peak')
+        self.assertEqual(res_create.data['reaction_detail']['display_name'], 'Peak')
+        self.assertEqual(res_create.data['reaction_detail']['color_token'], 'electric-gold')
+        review_id = res_create.data['id']
+
+        # PATCH using reaction_key
+        res_patch = self.client.patch(f'/api/v1/reviews/{review_id}/', {
+            'reaction_key': 'loved_it',
+            'review_text': 'Updated: Still love it.'
+        }, format='json')
+        self.assertEqual(res_patch.status_code, 200)
+        self.assertEqual(res_patch.data['reaction_key'], 'loved_it')
+        self.assertEqual(res_patch.data['reaction_detail']['display_name'], 'Loved It')
+        self.assertEqual(res_patch.data['reaction_detail']['color_token'], 'warm-coral')
+

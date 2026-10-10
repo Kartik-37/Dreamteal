@@ -15,13 +15,21 @@ from apps.tracking.serializers import (
 
 
 class TrackingMediaQuerySerializer(serializers.Serializer):
-    media = serializers.IntegerField(required=False, min_value=1)
+    media = serializers.CharField(required=False)
+    media_id = serializers.CharField(required=False)
+
+    def get_media_identifier(self):
+        return self.validated_data.get('media_id') or self.validated_data.get('media')
 
 
 class DiaryLogFilterSerializer(serializers.Serializer):
-    media = serializers.IntegerField(required=False, min_value=1)
+    media = serializers.CharField(required=False)
+    media_id = serializers.CharField(required=False)
     year = serializers.IntegerField(required=False, min_value=1900, max_value=2100)
     month = serializers.IntegerField(required=False, min_value=1, max_value=12)
+
+    def get_media_identifier(self):
+        return self.validated_data.get('media_id') or self.validated_data.get('media')
 
 
 class IsOwnerOrReadOnly(permissions.BasePermission):
@@ -43,7 +51,7 @@ class UserMediaStatusListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         query_serializer = TrackingMediaQuerySerializer(data=self.request.query_params)
         query_serializer.is_valid(raise_exception=True)
-        media_id = query_serializer.validated_data.get('media')
+        media_id = query_serializer.get_media_identifier()
 
         qs = UserMediaStatus.objects.filter(user=self.request.user)
         if media_id:
@@ -90,7 +98,7 @@ class UserMediaProgressListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         query_serializer = TrackingMediaQuerySerializer(data=self.request.query_params)
         query_serializer.is_valid(raise_exception=True)
-        media_id = query_serializer.validated_data.get('media')
+        media_id = query_serializer.get_media_identifier()
 
         qs = UserMediaProgress.objects.filter(user=self.request.user).select_related(
             'series_progress', 'manga_progress', 'game_progress'
@@ -143,7 +151,7 @@ class DiaryLogListCreateView(generics.ListCreateAPIView):
         params = query_serializer.validated_data
 
         qs = DiaryLog.objects.filter(user=self.request.user).select_related('media_item')
-        media_id = params.get('media')
+        media_id = query_serializer.get_media_identifier()
         if media_id:
             qs = qs.filter(media_item_id=media_id)
 

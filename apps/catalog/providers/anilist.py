@@ -120,13 +120,15 @@ class AniListProvider(BaseMetadataProvider):
         banner = item.get('bannerImage', '')
         year = item.get('startDate', {}).get('year')
 
-        country = item.get('countryOfOrigin', 'JP')
+        country = item.get('countryOfOrigin')
         if country == 'KR':
             subtype = 'MANHWA'
         elif country == 'CN':
             subtype = 'MANHUA'
-        else:
+        elif country == 'JP':
             subtype = 'MANGA'
+        else:
+            subtype = None
 
         return NormalizedSearchResult(
             provider=self.provider_key,

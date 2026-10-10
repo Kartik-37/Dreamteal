@@ -6,22 +6,22 @@ Welcome to **DreamTeal** — your custom unified pop-culture tracking, logging, 
 
 ## Source of Truth Documentation
 
-All technical and product specifications are maintained in the [`docs/`](file:///c:/Users/OM/Desktop/Dreamteal/docs) folder. Below are direct links to each reference document:
+All technical and product specifications are maintained in the [`docs/`](docs) folder. Below are direct links to each reference document:
 
-1. 📋 [Product Requirements Document (PRD)](file:///c:/Users/OM/Desktop/Dreamteal/docs/PRODUCT_REQUIREMENTS.md)
-2. 🏛️ [Architectural & Product Decisions](file:///c:/Users/OM/Desktop/Dreamteal/docs/PRODUCT_DECISIONS.md)
-3. 🏗️ [System Architecture](file:///c:/Users/OM/Desktop/Dreamteal/docs/ARCHITECTURE.md)
-4. 🗄️ [Data Model Specification](file:///c:/Users/OM/Desktop/Dreamteal/docs/DATA_MODEL.md)
-5. 🔌 [API Contract Specification](file:///c:/Users/OM/Desktop/Dreamteal/docs/API_CONTRACT.md)
-6. 🎨 [UI/UX Design System](file:///c:/Users/OM/Desktop/Dreamteal/docs/UI_DESIGN_SYSTEM.md)
-7. 📅 [Logging & Progress System Architecture](file:///c:/Users/OM/Desktop/Dreamteal/docs/LOGGING_SYSTEM.md)
-8. 💬 [Reaction-Based Review System Architecture](file:///c:/Users/OM/Desktop/Dreamteal/docs/REVIEW_SYSTEM.md)
-9. 🧩 [Recommendation Engine Architecture](file:///c:/Users/OM/Desktop/Dreamteal/docs/RECOMMENDATION_SYSTEM.md)
-10. 📚 [Media Catalog Architecture](file:///c:/Users/OM/Desktop/Dreamteal/docs/MEDIA_CATALOG.md)
-11. 🌐 [External Provider Integration Specification](file:///c:/Users/OM/Desktop/Dreamteal/docs/PROVIDER_INTEGRATION.md)
-12. 🚀 [Step-by-Step Implementation Roadmap](file:///c:/Users/OM/Desktop/Dreamteal/docs/IMPLEMENTATION_ROADMAP.md)
-13. 📊 [Progress Tracker](file:///c:/Users/OM/Desktop/Dreamteal/docs/PROGRESS.md)
-14. 📝 [Changelog](file:///c:/Users/OM/Desktop/Dreamteal/docs/CHANGELOG.md)
+1. 📋 [Product Requirements Document (PRD)](docs/PRODUCT_REQUIREMENTS.md)
+2. 🏛️ [Architectural & Product Decisions](docs/PRODUCT_DECISIONS.md)
+3. 🏗️ [System Architecture](docs/ARCHITECTURE.md)
+4. 🗄️ [Data Model Specification](docs/DATA_MODEL.md)
+5. 🔌 [API Contract Specification](docs/API_CONTRACT.md)
+6. 🎨 [UI/UX Design System](docs/UI_DESIGN_SYSTEM.md)
+7. 📅 [Logging & Progress System Architecture](docs/LOGGING_SYSTEM.md)
+8. 💬 [Reaction-Based Review System Architecture](docs/REVIEW_SYSTEM.md)
+9. 🧩 [Recommendation Engine Architecture](docs/RECOMMENDATION_SYSTEM.md)
+10. 📚 [Media Catalog Architecture](docs/MEDIA_CATALOG.md)
+11. 🌐 [External Provider Integration Specification](docs/PROVIDER_INTEGRATION.md)
+12. 🚀 [Step-by-Step Implementation Roadmap](docs/IMPLEMENTATION_ROADMAP.md)
+13. 📊 [Progress Tracker](docs/PROGRESS.md)
+14. 📝 [Changelog](docs/CHANGELOG.md)
 
 
 ---

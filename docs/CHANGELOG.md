@@ -4,6 +4,18 @@ All notable changes to the DreamTeal project specifications and codebase will be
 
 ---
 
+## [0.4.3-alpha] - 2026-10-10
+### Changed & Fixed (Phase 2 Repository Integrity & Final Audit)
+- **Git Merge Conflict Resolution**: Reconstructed clean `README.md` removing conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`); removed absolute `file:///` links across `README.md` and `PROJECT_CONTEXT.md` in favor of relative links.
+- **Centralized Game Session Service**: Implemented `GameSessionTrackingService` in `apps/tracking/services.py`; routed all diary session additions, edits, and deletions (including bulk queryset deletions) through the service to keep `GameProgress.hours_played` consistent without double-counting.
+- **Progress Validation & Bounds Enforcement**: Added strict category validation in `UserMediaProgressSerializer` rejecting incompatible nested progress types (e.g. series progress on manga); added numeric range validations (rejecting negative chapters, episodes, and hours); prevented tampering with internal `_synced_hours`.
+- **Contract & Serializer Bidirectional Aliasing**: Supported `media_id` vs `media_item` and `reaction_key` vs `reaction` seamlessly across request validation, response serialization, and query parameter filtering.
+- **Manga / Manhwa Uncertainty Preservation**: Maintained uncertainty (`subtype=None`) when metadata origin/format is ambiguous rather than inventing a subtype; verified cross-provider matching threshold ($\ge 75.0$) preventing improper automatic merges.
+- **Session Authentication & CSRF Enforcement**: Verified CSRF protection on unsafe session-authenticated requests using `APIClient(enforce_csrf_checks=True)`; verified strict review privacy for anonymous users, owners, and non-owners across detail and list views.
+- **Automated Verification**: Expanded test suite to **88 automated tests** passing 100% offline and deterministic in ~71s.
+
+---
+
 ## [0.4.2-alpha] - 2026-10-03
 ### Changed & Fixed (Phase 2 Final Correction Pass)
 - **Canonical Provider Identity**: Completely removed legacy provider fields (`tmdb_id`, `mal_id`, `rawg_id`) from `MediaItem`. All third-party identity is now stored exclusively in `ExternalProvider` and `ExternalMediaMapping` (Migration `0003`). Added regression test asserting no legacy provider ID fields exist on `MediaItem`.

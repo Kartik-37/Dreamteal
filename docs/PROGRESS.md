@@ -1,14 +1,13 @@
 # DreamTeal Project Progress Tracker
 
-## Current Status: Phase 2 FINAL CORRECTION PASS COMPLETE & VERIFIED | Ready for Phase 3 Review
+## Current Status: Phase 2 FINAL AUDIT & REPOSITORY INTEGRITY COMPLETE | Ready for Phase 3
 
 **Git Milestone Baseline**:
-- **Milestone Tag**: `v0.4.1-alpha`
-- **Baseline Commit**: `caaed85` (`feat(phase-2): baseline verified catalog, tracking, reviews, and external provider api layer`)
+- **Milestone Tag**: `v0.4.2-alpha`
 - **Integration Branch**: `develop`
 - **Main Branch**: `main` (synced with `origin/main`)
 - **Remote Status**: Synchronized with `origin` (`https://github.com/Kartik-37/Dreamteal.git`)
-- **Verification**: 72/72 automated tests passing (100% offline, deterministic)
+- **Verification**: 88/88 automated tests passing (100% offline, deterministic)
 
 ---
 
@@ -88,6 +87,14 @@
   - Privacy & Ownership Controls: Scoped private reviews strictly to owners (`404 Not Found` for non-owners); scoped all tracking querysets to authenticated users.
   - Provider Active State Routing: Respects `ExternalProvider.active` database switch across search, discovery, and imports.
   - 100% Offline Test Suite: 72 automated unit and integration tests passing offline with deterministic mocks.
+- [x] 18. Phase 2 Repository Integrity & Final Audit:
+  - Git Merge Conflict Resolution: Reconstructed clean `README.md` removing conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`); converted absolute `file:///` links across `README.md` and `PROJECT_CONTEXT.md` to clean relative paths.
+  - Centralized Game Session Service: Implemented `GameSessionTrackingService` in `apps/tracking/services.py`; wired into `DiaryLog` lifecycle and `DiaryLogQuerySet.delete()` to ensure bulk deletions, edits, and creation maintain exact `GameProgress.hours_played` totals without double-counting.
+  - Progress Validation & Bounds: Enforced media-type compatibility on nested progress serializers (series/manga/game), added numeric bounds validation (non-negative chapters/episodes/hours), and protected internal `_synced_hours` against client tampering.
+  - Contract & Serializer Alignment: Enabled bidirectional compatibility for `media_id` vs `media_item` and `reaction_key` vs `reaction` across tracking status, progress, diary logs, and review endpoints.
+  - Manga / Manhwa Subtype Integrity: Preserved uncertainty (`subtype=None`) when metadata origin/format is ambiguous instead of inventing subtypes; verified cross-provider matching confidence threshold ($\ge 75.0$) preventing improper automatic merges.
+  - Authentication, CSRF & Privacy: Verified session authentication CSRF enforcement on unsafe requests using `APIClient(enforce_csrf_checks=True)`; verified strict review privacy for anonymous users, owners, and non-owners across detail and list views.
+  - Complete Automated Suite: 88 automated tests passing 100% offline and deterministic.
 
 
 ---

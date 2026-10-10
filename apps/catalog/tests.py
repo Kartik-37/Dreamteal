@@ -1033,3 +1033,212 @@ class SeedCatalogValidationTestCase(TestCase):
         self.assertEqual(cyberpunk_map.media_item.title, 'Cyberpunk 2077')
         self.assertIn('cyberpunk-2077', cyberpunk_map.external_url)
         self.assertNotIn('witcher', cyberpunk_map.external_url)
+
+
+class MangaManhwaEndToEndTestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.registry = ProviderRegistry()
+        self.anilist = AniListProvider()
+        self.jikan = JikanProvider()
+
+    @patch('apps.catalog.providers.anilist.requests.post')
+    def test_manga_and_manhwa_filter_isolation_anilist(self, mock_post):
+        """Manga and Manhwa filters do not silently return interchangeable results."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            'data': {'Page': {'media': [
+                {'id': 1, 'title': {'romaji': 'Manga Title'}, 'countryOfOrigin': 'JP', 'format': 'MANGA', 'startDate': {'year': 2020}, 'coverImage': {}, 'bannerImage': None, 'description': 'desc'}
+            ]}}
+        }
+        mock_post.return_value = mock_resp
+
+        res_manga = self.registry.search('Title', category='MANGA')
+        self.assertEqual(len(res_manga), 1)
+        self.assertEqual(res_manga[0].subtype, 'MANGA')
+
+        call_args = mock_post.call_args[1]['json']
+        self.assertEqual(call_args['variables'].get('country'), 'JP')
+
+        mock_resp.json.return_value = {
+            'data': {'Page': {'media': [
+                {'id': 2, 'title': {'romaji': 'Manhwa Title'}, 'countryOfOrigin': 'KR', 'format': 'MANGA', 'startDate': {'year': 2021}, 'coverImage': {}, 'bannerImage': None, 'description': 'desc'}
+            ]}}
+        }
+        res_manhwa = self.registry.search('Title', category='MANHWA')
+        self.assertEqual(len(res_manhwa), 1)
+        self.assertEqual(res_manhwa[0].subtype, 'MANHWA')
+        call_args_kr = mock_post.call_args[1]['json']
+        self.assertEqual(call_args_kr['variables'].get('country'), 'KR')
+
+    def test_ambiguous_provider_metadata_preserves_uncertainty(self):
+        """Where provider metadata is ambiguous, preserve uncertainty rather than inventing a subtype."""
+        raw_ani = {
+            'id': 999,
+            'title': {'romaji': 'Unknown Origin Work'},
+            'format': 'MANGA',
+            'countryOfOrigin': None,
+            'startDate': {'year': 2020}
+        }
+        norm_ani = self.anilist._normalize_search_item(raw_ani)
+        self.assertIsNone(norm_ani.subtype)
+
+        raw_jik = {
+            'mal_id': 888,
+            'title': 'Unrecognized Type Work',
+            'type': 'UnknownFormat',
+            'published': {'from': '2021-01-01'}
+        }
+        norm_jik = self.jikan._normalize_search_item(raw_jik)
+        self.assertIsNone(norm_jik.subtype)
+
+    @patch('apps.catalog.providers.anilist.requests.post')
+    def test_anilist_manga_end_to_end_pipeline(self, mock_post):
+        """
+        Full path for AniList:
+        Search -> normalized result -> discovery -> media import -> MangaDetail -> external mappings -> local detail response.
+        """
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            'data': {
+                'Media': {
+                    'id': 33333,
+                    'title': {'romaji': 'Frieren', 'english': 'Frieren: Beyond Journey\'s End'},
+                    'format': 'MANGA',
+                    'countryOfOrigin': 'JP',
+                    'startDate': {'year': 2020},
+                    'description': 'An elf mage on a journey.',
+                    'coverImage': {'large': 'https://example.com/frieren.jpg'},
+                    'bannerImage': None,
+                    'chapters': 130,
+                    'volumes': 13,
+                    'staff': {'edges': [{'node': {'name': {'full': 'Kanehito Yamada'}}, 'role': 'Story'}]},
+                    'genres': ['Adventure', 'Fantasy'],
+                    'tags': [{'name': 'Magic'}]
+                }
+            }
+        }
+        mock_post.return_value = mock_resp
+
+        # 1. Import media
+        item, created = self.registry.import_media(
+            provider_key='anilist',
+            external_id='33333',
+            title_hint='Frieren'
+        )
+        self.assertTrue(created)
+        self.assertEqual(item.media_type, 'MANGA')
+        self.assertEqual(item.manga_detail.manga_type, 'MANGA')
+        self.assertEqual(item.manga_detail.author, 'Kanehito Yamada')
+
+        # 2. Check external mapping
+        mapping = ExternalMediaMapping.objects.get(media_item=item, provider__provider_key='anilist')
+        self.assertEqual(mapping.external_id, '33333')
+
+        # 3. Local detail response via GET /api/v1/media/<slug>/
+        res = self.client.get(f'/api/v1/media/{item.slug}/')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data['media_type'], 'MANGA')
+        self.assertEqual(res.data['manga_detail']['manga_type'], 'MANGA')
+        self.assertEqual(res.data['manga_detail']['author'], 'Kanehito Yamada')
+        self.assertEqual(res.data['external_mappings'][0]['provider_key'], 'anilist')
+
+    @patch('apps.catalog.providers.jikan.requests.get')
+    def test_jikan_manhwa_end_to_end_pipeline(self, mock_get):
+        """
+        Full path for Jikan:
+        Search -> normalized result -> discovery -> media import -> MangaDetail -> external mappings -> local detail response.
+        """
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            'data': {
+                'mal_id': 77777,
+                'title': 'Tower of God',
+                'type': 'Manhwa',
+                'published': {'from': '2010-06-30T00:00:00+00:00'},
+                'synopsis': 'Reach the top of the Tower and everything will be yours.',
+                'images': {'jpg': {'large_image_url': 'https://example.com/tog.jpg'}},
+                'authors': [{'name': 'SIU'}],
+                'genres': [{'name': 'Action'}, {'name': 'Fantasy'}],
+                'themes': [{'name': 'Super Power'}]
+            }
+        }
+        mock_get.return_value = mock_resp
+
+        # 1. Import media
+        item, created = self.registry.import_media(
+            provider_key='jikan',
+            external_id='77777',
+            title_hint='Tower of God'
+        )
+        self.assertTrue(created)
+        self.assertEqual(item.media_type, 'MANGA')
+        self.assertEqual(item.manga_detail.manga_type, 'MANHWA')
+        self.assertEqual(item.manga_detail.author, 'SIU')
+
+        # 2. Check external mapping
+        mapping = ExternalMediaMapping.objects.get(media_item=item, provider__provider_key='jikan')
+        self.assertEqual(mapping.external_id, '77777')
+
+        # 3. Local detail response via GET /api/v1/media/<slug>/
+        res = self.client.get(f'/api/v1/media/{item.slug}/')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data['media_type'], 'MANGA')
+        self.assertEqual(res.data['manga_detail']['manga_type'], 'MANHWA')
+        self.assertEqual(res.data['manga_detail']['author'], 'SIU')
+
+    def test_cross_provider_matching_threshold_and_ambiguity(self):
+        """
+        Cross-provider mappings are attached only when confidently identified (>= 75.0).
+        Ambiguous matches (< 75.0) are NOT merged automatically.
+        """
+        existing_item = MediaItem.objects.create(
+            media_type='MANGA',
+            title='Solo Leveling',
+            slug='solo-leveling-2018',
+            release_year=2018
+        )
+        MangaDetail.objects.create(
+            media_item=existing_item,
+            manga_type='MANHWA',
+            author='Chugong'
+        )
+
+        # Ambiguous candidate: spin-off sequel with different title and year
+        ambiguous_candidate = NormalizedMediaDetail(
+            provider='jikan',
+            external_id='999999',
+            external_url='https://example.com/sl-rag',
+            title='Solo Leveling: Ragnarok',
+            media_type='MANGA',
+            slug_candidate='solo-leveling-ragnarok-2024',
+            release_year=2024,
+            synopsis='Spin-off sequel.',
+            manga_type='MANHWA',
+            author='Daul'
+        )
+        match, score = MediaMatcherService.find_match(ambiguous_candidate)
+        self.assertIsNone(match)
+        self.assertLess(score, MediaMatcherService.MIN_CONFIDENCE_THRESHOLD)
+
+        # Confident candidate: identical title, author, and year
+        confident_candidate = NormalizedMediaDetail(
+            provider='jikan',
+            external_id='121496',
+            external_url='https://example.com/solo-leveling',
+            title='Solo Leveling',
+            media_type='MANGA',
+            slug_candidate='solo-leveling-2018',
+            release_year=2018,
+            synopsis='Original hunter webtoon.',
+            manga_type='MANHWA',
+            author='Chugong'
+        )
+        confident_match, confident_score = MediaMatcherService.find_match(confident_candidate)
+        self.assertIsNotNone(confident_match)
+        self.assertEqual(confident_match.id, existing_item.id)
+        self.assertGreaterEqual(confident_score, MediaMatcherService.MIN_CONFIDENCE_THRESHOLD)
+

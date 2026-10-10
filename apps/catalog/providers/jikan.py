@@ -85,8 +85,10 @@ class JikanProvider(BaseMetadataProvider):
             subtype = 'MANHWA'
         elif raw_type == 'MANHUA':
             subtype = 'MANHUA'
-        else:
+        elif raw_type in ['MANGA', 'ONE_SHOT', 'DOUJINSHI']:
             subtype = 'MANGA'
+        else:
+            subtype = None
 
         return NormalizedSearchResult(
             provider=self.provider_key,

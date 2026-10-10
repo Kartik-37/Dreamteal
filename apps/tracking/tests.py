@@ -526,3 +526,182 @@ class TrackingPrivacyAndOwnershipTestCase(TestCase):
         res_delete = self.client_b.delete(f'/api/v1/tracking/logs/{self.alice_log.id}/')
         self.assertEqual(res_delete.status_code, 404)
 
+
+class ProgressValidationAndGameServiceTestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(username='track_val_user', password='password123')
+        self.client.force_authenticate(user=self.user)
+
+        self.movie = MediaItem.objects.create(
+            media_type='MOVIE', title='Oppenheimer', slug='oppenheimer-2023', release_year=2023
+        )
+        self.series = MediaItem.objects.create(
+            media_type='SERIES', title='Succession', slug='succession-2018', release_year=2018
+        )
+        self.manga = MediaItem.objects.create(
+            media_type='MANGA', title='Berserk', slug='berserk-1989', release_year=1989
+        )
+        self.game = MediaItem.objects.create(
+            media_type='GAME', title='Elden Ring', slug='elden-ring-2022', release_year=2022
+        )
+
+    def test_incompatible_nested_progress_rejected(self):
+        """Reject incompatible nested objects instead of silently ignoring them."""
+        # 1. Series progress on GAME -> 400
+        res1 = self.client.post('/api/v1/tracking/progress/', {
+            'media_id': str(self.game.id),
+            'series_progress': {'current_season': 1, 'current_episode': 1}
+        }, format='json')
+        self.assertEqual(res1.status_code, 400)
+        self.assertIn('series_progress', res1.data)
+
+        # 2. Manga progress on SERIES -> 400
+        res2 = self.client.post('/api/v1/tracking/progress/', {
+            'media_id': str(self.series.id),
+            'manga_progress': {'current_chapter': 10}
+        }, format='json')
+        self.assertEqual(res2.status_code, 400)
+        self.assertIn('manga_progress', res2.data)
+
+        # 3. Game progress on MOVIE -> 400
+        res3 = self.client.post('/api/v1/tracking/progress/', {
+            'media_id': str(self.movie.id),
+            'game_progress': {'hours_played': '5.0'}
+        }, format='json')
+        self.assertEqual(res3.status_code, 400)
+
+    def test_negative_numeric_progress_rejected(self):
+        """Rejects negative chapters, episodes, seasons, and hours."""
+        res_series = self.client.post('/api/v1/tracking/progress/', {
+            'media_id': str(self.series.id),
+            'series_progress': {'current_season': -1, 'current_episode': 0}
+        }, format='json')
+        self.assertEqual(res_series.status_code, 400)
+
+        res_manga = self.client.post('/api/v1/tracking/progress/', {
+            'media_id': str(self.manga.id),
+            'manga_progress': {'current_chapter': -10}
+        }, format='json')
+        self.assertEqual(res_manga.status_code, 400)
+
+        res_game = self.client.post('/api/v1/tracking/progress/', {
+            'media_id': str(self.game.id),
+            'game_progress': {'hours_played': '-5.0'}
+        }, format='json')
+        self.assertEqual(res_game.status_code, 400)
+
+    def test_negative_session_hours_and_synced_hours_protection(self):
+        """Validates snapshot bounds and prevents client manipulation of internal _synced_hours."""
+        # Negative session hours -> 400
+        res_neg = self.client.post('/api/v1/tracking/logs/', {
+            'media_id': str(self.game.id),
+            'logged_date': '2026-10-10',
+            'progress_snapshot': {'session_hours': -3.5}
+        }, format='json')
+        self.assertEqual(res_neg.status_code, 400)
+
+        # Tampering with internal _synced_hours is ignored and stripped
+        res_tamper = self.client.post('/api/v1/tracking/logs/', {
+            'media_id': str(self.game.id),
+            'logged_date': '2026-10-10',
+            'progress_snapshot': {'session_hours': 4.0, '_synced_hours': '9999.0'}
+        }, format='json')
+        self.assertEqual(res_tamper.status_code, 201)
+        log = DiaryLog.objects.get(id=res_tamper.data['id'])
+        self.assertEqual(log.progress_snapshot.get('_synced_hours'), '4.0')
+
+        # Check GameProgress
+        prog = UserMediaProgress.objects.get(user=self.user, media_item=self.game)
+        self.assertEqual(prog.game_progress.hours_played, Decimal('4.0'))
+
+    def test_media_id_alias_supported_across_endpoints(self):
+        """Verifies media_id alias is accepted across status, progress, and logs."""
+        res_st = self.client.post('/api/v1/tracking/status/', {
+            'media_id': str(self.series.id),
+            'status': 'WATCHING',
+            'is_favorite': True
+        }, format='json')
+        self.assertEqual(res_st.status_code, 201)
+        self.assertTrue(res_st.data['is_favorite'])
+
+        res_pr = self.client.post('/api/v1/tracking/progress/', {
+            'media_id': str(self.series.id),
+            'series_progress': {'current_season': 1, 'current_episode': 4}
+        }, format='json')
+        self.assertEqual(res_pr.status_code, 201)
+
+        res_lg = self.client.post('/api/v1/tracking/logs/', {
+            'media_id': str(self.series.id),
+            'logged_date': '2026-10-10',
+            'progress_snapshot': {'season': 1, 'episode': 5}
+        }, format='json')
+        self.assertEqual(res_lg.status_code, 201)
+
+    def test_duplicate_progress_creation_returns_409(self):
+        """Ensure each user has only one base progress record per media item, returning 409 on duplicate."""
+        res1 = self.client.post('/api/v1/tracking/progress/', {
+            'media_id': str(self.manga.id),
+            'manga_progress': {'current_chapter': 1}
+        }, format='json')
+        self.assertEqual(res1.status_code, 201)
+
+        res2 = self.client.post('/api/v1/tracking/progress/', {
+            'media_id': str(self.manga.id),
+            'manga_progress': {'current_chapter': 2}
+        }, format='json')
+        self.assertEqual(res2.status_code, 409)
+
+    def test_game_session_bulk_queryset_deletion_adjusts_hours(self):
+        """Verifies bulk QuerySet deletion uses GameSessionTrackingService and deducts hours."""
+        log1 = DiaryLog.objects.create(
+            user=self.user,
+            media_item=self.game,
+            logged_date='2026-10-08',
+            progress_snapshot={'session_hours': 3.5}
+        )
+        log2 = DiaryLog.objects.create(
+            user=self.user,
+            media_item=self.game,
+            logged_date='2026-10-09',
+            progress_snapshot={'session_hours': 4.5}
+        )
+
+        prog = UserMediaProgress.objects.get(user=self.user, media_item=self.game)
+        self.assertEqual(prog.game_progress.hours_played, Decimal('8.0'))
+
+        # Bulk queryset deletion
+        DiaryLog.objects.filter(media_item=self.game, user=self.user).delete()
+        prog.game_progress.refresh_from_db()
+        self.assertEqual(prog.game_progress.hours_played, Decimal('0.0'))
+
+    def test_game_session_api_patch_recalculates_hours(self):
+        """Verifies PATCH on DiaryLogDetailView recalculates GameProgress.hours_played atomically."""
+        res_post = self.client.post('/api/v1/tracking/logs/', {
+            'media_id': str(self.game.id),
+            'logged_date': '2026-10-10',
+            'progress_snapshot': {'session_hours': 2.0}
+        }, format='json')
+        self.assertEqual(res_post.status_code, 201)
+        log_id = res_post.data['id']
+
+        prog = UserMediaProgress.objects.get(user=self.user, media_item=self.game)
+        self.assertEqual(prog.game_progress.hours_played, Decimal('2.0'))
+
+        # PATCH to increase duration to 5.5
+        res_patch = self.client.patch(f'/api/v1/tracking/logs/{log_id}/', {
+            'progress_snapshot': {'session_hours': 5.5}
+        }, format='json')
+        self.assertEqual(res_patch.status_code, 200)
+
+        prog.game_progress.refresh_from_db()
+        self.assertEqual(prog.game_progress.hours_played, Decimal('5.5'))
+
+        # DELETE via API
+        res_del = self.client.delete(f'/api/v1/tracking/logs/{log_id}/')
+        self.assertEqual(res_del.status_code, 204)
+
+        prog.game_progress.refresh_from_db()
+        self.assertEqual(prog.game_progress.hours_played, Decimal('0.0'))
+
+

@@ -76,3 +76,46 @@ class UsersAuthAPITestCase(TestCase):
         res_unauth = self.client.get('/api/v1/users/me/')
         self.assertIn(res_unauth.status_code, [401, 403])
 
+    def test_csrf_enforcement_on_session_unsafe_requests(self):
+        """Verifies session authentication enforces CSRF protection on unsafe requests."""
+        csrf_client = APIClient(enforce_csrf_checks=True)
+        # Login
+        logged_in = csrf_client.login(username='auth_tester', password='auth_password123')
+        self.assertTrue(logged_in)
+
+        # Unsafe PATCH request without CSRF token fails with 403 Forbidden
+        res_fail = csrf_client.patch('/api/v1/users/me/', {'bio': 'Attempt without CSRF'}, format='json')
+        self.assertEqual(res_fail.status_code, 403)
+
+        # Retrieve CSRF token
+        res_csrf = csrf_client.get('/api/v1/users/csrf/')
+        token = res_csrf.data['csrftoken']
+        csrf_client.cookies['csrftoken'] = token
+
+        # Unsafe PATCH request with X-CSRFToken header succeeds
+        res_ok = csrf_client.patch(
+            '/api/v1/users/me/',
+            {'bio': 'Authorized with CSRF'},
+            format='json',
+            HTTP_X_CSRFTOKEN=token
+        )
+        self.assertEqual(res_ok.status_code, 200)
+        self.assertEqual(res_ok.data['bio'], 'Authorized with CSRF')
+
+    def test_profile_settings_isolated_between_users(self):
+        """Verifies one user cannot read or alter another user's profile settings."""
+        user_b = User.objects.create_user(username='other_user', password='pass_other_123')
+        client_b = APIClient()
+        client_b.force_authenticate(user=user_b)
+
+        # Bob updates his profile
+        res_b = client_b.patch('/api/v1/users/me/', {'display_name': 'BobTheBuilder'})
+        self.assertEqual(res_b.status_code, 200)
+        self.assertEqual(res_b.data['username'], 'other_user')
+        self.assertEqual(res_b.data['display_name'], 'BobTheBuilder')
+
+        # Alice's profile remains untouched
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.username, 'auth_tester')
+        self.assertNotEqual(self.user.profile.display_name, 'BobTheBuilder')
+

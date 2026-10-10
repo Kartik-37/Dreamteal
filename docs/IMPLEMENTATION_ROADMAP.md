@@ -46,7 +46,7 @@ Implement backend data foundations in strict verified order:
 
 ---
 
-### Phase 2: Core Backend REST API + External Media Providers (FINAL CORRECTION PASS COMPLETE)
+### Phase 2: Core Backend REST API + External Media Providers (COMPLETED & VERIFIED)
 - [x] Visual Model Correction: Completely eliminated reaction icons/emoji; implemented dedicated color tokens and typography text labels; removed `icon` column from database.
 - [x] External Provider Architecture: Extensible `BaseMetadataProvider` interface and adapters for TMDB, AniList, Jikan, and RAWG.
 - [x] Discovery Semantics Correction: Distinct `popular`, `latest`, `trending`, and `upcoming` feeds across all providers.
@@ -56,13 +56,14 @@ Implement backend data foundations in strict verified order:
 - [x] Real Metadata Refresh & Taxonomy Reconciliation: Enabled updating of provider-owned catalog metadata on `force_refresh=True` and reconciled provider taxonomy (`genres`, `tags`) while strictly protecting user-owned data.
 - [x] Verified Seed Data Provider IDs: Verified all seed provider mappings (Cyberpunk 2077 -> RAWG 41494 `cyberpunk-2077`) with automated validation preventing invalid bindings.
 - [x] AniList $\rightarrow$ Jikan Import Fallback: Integrated `title_hint` into `import_media` and `fetch_details` with `MediaMatcherService` confidence scoring ($\ge 75.0$).
-- [x] Transaction-Safe Game Diary Aggregation: Consumption sessions are the source of truth for playtime; edits and deletions atomically update `GameProgress.hours_played` without double-counting; isolated when `sync_progress=False`.
+- [x] Transaction-Safe Game Diary Aggregation: Consumption sessions are the source of truth for playtime; edits and deletions atomically update `GameProgress.hours_played` without double-counting via `GameSessionTrackingService`; isolated when `sync_progress=False`.
 - [x] Privacy & Access Control Enforcement: Scoped private reviews strictly to owners (`404 Not Found` for non-owners); scoped all tracking querysets to authenticated users.
 - [x] Provider Active State Routing: Respects `ExternalProvider.active` database switch across search, discovery, and imports.
 - [x] Region-Aware TMDB Watch Providers: Configurable `DEFAULT_PROVIDER_REGION=IN` without arbitrary country fallbacks.
 - [x] Media Import Lifecycle: Returns `201 Created` for new records, `200 OK` for existing/refreshed records.
 - [x] Balanced Universal Search: Category-aware quotas and round-robin interleaving preventing provider domination.
-- [x] 100% Offline Test Suite: 72 automated unit and integration tests passing offline with deterministic mocks.
+- [x] Contract & Progress Validation: Nested progress validation rejecting incompatible categories, numeric bounds checks, `media_id` vs `media_item` bidirectional compatibility.
+- [x] 100% Offline Test Suite: 88 automated unit and integration tests passing offline with deterministic mocks.
 
 
 

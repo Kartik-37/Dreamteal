@@ -259,6 +259,17 @@ class GameProgress(models.Model):
         return f"{self.hours_played}h ({self.progress.media_item.title})"
 
 
+class DiaryLogQuerySet(models.QuerySet):
+    """Custom queryset for DiaryLog supporting transaction-safe bulk deletions."""
+    def delete(self):
+        from apps.tracking.services import GameSessionTrackingService
+        with transaction.atomic():
+            for log in self:
+                if log.media_item.media_type == 'GAME':
+                    GameSessionTrackingService.apply_session_delete(log)
+            return super().delete()
+
+
 class DiaryLog(models.Model):
     """
     History-preserving consumption records supporting controlled log editing.
@@ -305,6 +316,8 @@ class DiaryLog(models.Model):
     def __init__(self, *args, **kwargs):
         self._sync_progress = kwargs.pop('sync_progress', True)
         super().__init__(*args, **kwargs)
+
+    objects = DiaryLogQuerySet.as_manager()
 
     class Meta:
         ordering = ['-logged_date', '-created_at']
@@ -374,28 +387,19 @@ class DiaryLog(models.Model):
                     manga_prog.save()
 
         elif media_type == 'GAME':
-            game_prog, _ = GameProgress.objects.get_or_create(progress=base_progress)
+            from apps.tracking.services import GameSessionTrackingService
             session_hours_raw = self.progress_snapshot.get('session_hours')
             current_session_hours = Decimal(str(session_hours_raw)) if session_hours_raw is not None else Decimal('0.0')
 
             if is_new:
-                if current_session_hours > 0:
-                    game_prog.hours_played += current_session_hours
-                    self.progress_snapshot['_synced_hours'] = str(current_session_hours)
-                    DiaryLog.objects.filter(pk=self.pk).update(progress_snapshot=self.progress_snapshot)
+                GameSessionTrackingService.apply_session_create(self, sync_progress=sync_progress)
             else:
-                diff = current_session_hours - old_synced_hours
-                if diff != Decimal('0.0'):
-                    game_prog.hours_played = max(Decimal('0.0'), game_prog.hours_played + diff)
-                self.progress_snapshot['_synced_hours'] = str(current_session_hours)
-                DiaryLog.objects.filter(pk=self.pk).update(progress_snapshot=self.progress_snapshot)
-
-            completion_type = self.progress_snapshot.get('completion_type')
-            if completion_type and completion_type in GameProgress.CompletionType.values:
-                game_prog.completion_type = completion_type
-            if 'platform' in self.progress_snapshot:
-                game_prog.platform_played_on = self.progress_snapshot['platform']
-            game_prog.save()
+                GameSessionTrackingService.apply_session_update(
+                    self,
+                    old_synced_hours=old_synced_hours,
+                    new_session_hours=current_session_hours,
+                    sync_progress=sync_progress
+                )
 
     @transaction.atomic
     def save(self, *args, **kwargs):
@@ -427,25 +431,8 @@ class DiaryLog(models.Model):
         Override delete to decrement game session hours from GameProgress
         if this session was previously synced.
         """
-        if self.media_item.media_type == 'GAME' and self.progress_snapshot:
-            raw_h = self.progress_snapshot.get('_synced_hours')
-            synced_hours = Decimal('0.0')
-            if raw_h is not None:
-                try:
-                    synced_hours = Decimal(str(raw_h))
-                except (ValueError, TypeError):
-                    synced_hours = Decimal('0.0')
-
-            if synced_hours > 0:
-                base_progress = UserMediaProgress.objects.filter(
-                    user=self.user,
-                    media_item=self.media_item
-                ).first()
-                if base_progress and hasattr(base_progress, 'game_progress'):
-                    game_prog = base_progress.game_progress
-                    game_prog.hours_played = max(Decimal('0.0'), game_prog.hours_played - synced_hours)
-                    game_prog.save()
-
+        from apps.tracking.services import GameSessionTrackingService
+        GameSessionTrackingService.apply_session_delete(self)
         super().delete(*args, **kwargs)
 
     def __str__(self):

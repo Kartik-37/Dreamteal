@@ -13,7 +13,11 @@ from apps.reviews.serializers import MediaReviewSerializer, ReactionDefinitionSe
 
 
 class ReviewMediaQuerySerializer(serializers.Serializer):
-    media = serializers.IntegerField(required=False, min_value=1)
+    media = serializers.CharField(required=False)
+    media_id = serializers.CharField(required=False)
+
+    def get_media_identifier(self):
+        return self.validated_data.get('media_id') or self.validated_data.get('media')
 
 
 class IsReviewOwnerOrReadOnly(permissions.BasePermission):
@@ -53,7 +57,7 @@ class MediaReviewListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         query_serializer = ReviewMediaQuerySerializer(data=self.request.query_params)
         query_serializer.is_valid(raise_exception=True)
-        media_id = query_serializer.validated_data.get('media')
+        media_id = query_serializer.get_media_identifier()
 
         qs = MediaReview.objects.select_related('user', 'media_item', 'reaction')
         if media_id:
