@@ -2,6 +2,37 @@
 
 All notable changes to the DreamTeal project specifications and codebase will be documented in this file.
 
+## [0.5.1-alpha] - 2026-10-10
+### Changed & Fixed (Phase 3 Recommendation Engine Audit & Correction Pass)
+- **Corrected `Not My Thing` Negative Preference Modeling**: Upgraded `RecommendationEngine._get_user_preferences` to extract `disliked_genres` and `disliked_tags` from works reviewed with `Not My Thing`. Candidates sharing those attributes receive a negative preference penalty, while unrelated candidates sharing none of the disliked attributes receive zero penalty. Disliking one title in a franchise does not conflate with disliking the franchise or strip franchise relationship points from other works.
+- **Strict Franchise vs Thematic Vibe Separation**: Removed generic theme tags (`cyberpunk`, `dystopian`, `dark-fantasy`, etc.) from franchise identifiers (`KNOWN_FRANCHISE_IDENTIFIERS`). Generic tags now score strictly under thematic vibe similarity. Verified franchise connections require explicit franchise tags (`franchise-*`, `universe-*`, specific IP universe tags) or verified cross-medium creator overlap.
+- **Redundant Database Query Elimination**: Optimized `check_cross_media_relationship` to reuse prefetched `source_tag_slugs` and `cand_tag_slugs` in memory, eliminating redundant SQL queries during candidate evaluation. Optimized `_get_creator_names` to inspect only the extension model matching the item's `media_type`.
+- **Accurate Community Explanations**: Replaced subjective claim `"Highly praised"` with factual consensus description `"Received strong community Peak and Loved It qualitative reactions."`, requiring a meaningful evidence sample size ($\ge 3$ public reviews, $\ge 70\%$ positive). Sparse public reviews cleanly return no community reason.
+- **Diagnostic API Security Hardening**: In `RecommendationNextView`, restricted internal similarity score exposure (`include_scores=true`) to `DEBUG=True` mode or authenticated staff users, ensuring production clients never inadvertently expose raw internal scores.
+- **Comprehensive Regression Tests**: Added 14 new regression tests covering negative preference feedback, unrelated item protection, multi-user isolation, Skip scope, franchise preservation, and diagnostic include_scores restrictions. Full automated test suite expanded to **132 tests** passing 100% offline and deterministic in ~146s.
+
+---
+
+## [0.5.0-alpha] - 2026-10-10
+### Added (Phase 3 Deterministic Recommendation Engine)
+- **Configurable Rule-Based Recommendation Engine**: Built `RecommendationEngine` in `apps/recommendations/services.py` with multi-signal scoring:
+  - Normalized Jaccard similarity for Tag/vibe overlap (provisional weight: 40.0).
+  - Normalized Jaccard similarity for Genre overlap (provisional weight: 30.0).
+  - Cross-media franchise adapter detection (provisional weight: 15.0).
+  - User reaction affinity bonus/penalty (provisional weight: 15.0 for Peak, Loved It, Good Time; penalty for Not My Thing).
+  - Minimum evidence threshold (`min_evidence_score=15.0`) eliminating weak coincidental matches.
+  - Deterministic tie-breaking ordering (`-total_score`, `-shared_tags_count`, `-shared_genres_count`, `-release_year`, `title.lower()`, `str(id)`).
+- **Human-Readable Match Explanations**: Generates transparent, data-supported explanations ("Shares Cyberpunk and Dystopian tags", "Shares Action and Mystery genres", "Connected by verified franchise or adaptation relationship") derived directly from matched catalog attributes.
+- **Personalization & Privacy Safeguards**:
+  - Excludes already consumed media (`WATCHED`, `COMPLETED`, `FINISHED`, `WATCHING`, `READING`, `PLAYING`, `DROPPED`, `PAUSED`, or logged in `DiaryLog`).
+  - Retains backlog candidates (`PLAN_TO_WATCH`, `BACKLOG`) for next-to-consume discovery.
+  - Excludes media reviewed with `Skip`.
+  - Respects strict user privacy boundaries: anonymous users receive unbiased catalog similarity; private reviews/diaries of other users are never exposed in personalized recommendations.
+- **Cross-Media & Subtype Support**: Full support for cross-category discovery (Movie $\rightarrow$ Game, Series $\rightarrow$ Manga, Game $\rightarrow$ Movie) with toggleable `cross_category` query parameter and category filtering (`category=MOVIE|SERIES|MANGA|MANHWA|GAME`) respecting Manga vs Manhwa distinctions.
+- **Next Recommendations API Endpoint**: Implemented `GET /api/v1/recommendations/next/<slug>/` with DRF query validation, bounded limits (1-50, default 10), 404 for unknown slugs, 400 for invalid query parameters, and developer-only diagnostic `include_scores` flag.
+- **Query Optimization**: Implemented single-query candidate prefetching (`select_related`, `prefetch_related`) eliminating N+1 database queries.
+- **Automated Offline Test Suite**: Added 30 comprehensive tests in `apps/recommendations/tests.py`, expanding the automated test suite to **118 tests** passing 100% offline and deterministic in ~112s.
+
 ---
 
 ## [0.4.3-alpha] - 2026-10-10

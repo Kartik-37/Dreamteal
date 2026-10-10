@@ -115,5 +115,41 @@ External Third-Party APIs (TMDB, AniList, Jikan, RAWG)
 10. **Provider Active State Routing**: Provider routing respects the `ExternalProvider.active` database switch, bypassing disabled providers in search, feeds, and imports.
 11. **Transaction-Safe Diary Aggregation**: Game diary consumption sessions act as the transactional source of truth for session gameplay, with atomic updates/deletions maintaining consistent cumulative `GameProgress.hours_played`.
 
+---
 
+## 7. Recommendation Engine Architecture [APPROVED]
 
+```text
+React Frontend (Vite)
+       │
+       ▼
+DRF API Layer: GET /api/v1/recommendations/next/<slug>/?cross_category=true&category=GAME&limit=10
+       │
+       ▼
+apps.recommendations.views.RecommendationNextView
+       │
+       ▼
+apps.recommendations.services.RecommendationEngine
+  ├── 1. Candidate Retrieval (Single bulk prefetch query, category/cross-category filter)
+  ├── 2. User History & Privacy Filtering (Excludes completed/consumed/dropped/paused/skip items)
+  ├── 3. Tag & Vibe Jaccard Similarity (Weight: 40.0)
+  ├── 4. Genre Jaccard Similarity (Weight: 30.0)
+  ├── 5. Cross-Media & Franchise Adapter Detection (Weight: 15.0)
+  ├── 6. User Reaction Affinity Scoring (Weight: 15.0 for Peak, Loved It, Good Time; penalty for Not My Thing)
+  ├── 7. Threshold Filtering (min_evidence_score = 15.0)
+  ├── 8. Human-Readable Match Explanation Generation
+  └── 9. Deterministic Tie-Breaking & Bounded Slicing (limit: 1 to 50)
+       │
+       ▼
+Serialized Response Envelope: Base Media + Recommended Items (UUID, slug, title, poster, reasons)
+```
+
+### Architectural Guarantees:
+1. **100% Offline & Deterministic**: Zero reliance on machine learning, vector embeddings, external recommendation APIs, or randomized sampling. The engine runs entirely on local database metadata.
+2. **Zero Star Ratings Guarantee**: Reactions (`Peak`, `Loved It`, `Good Time`, `Not My Thing`, `Skip`) are purely qualitative affinity signals and are never converted into star ratings or numeric averages.
+3. **Privacy & Owner Scoping**: Personalized history and preference signals use only the requesting authenticated user's own data (`is_favorite`, positive reactions, diary logs). `Not My Thing` feedback applies negative preference weighting against the reviewed media's relevant genres and tags without penalizing unrelated candidates. Private reviews and diary logs belonging to other users are strictly excluded. Anonymous users receive unbiased, general content-based similarity.
+4. **No N+1 Queries**: Candidates are retrieved in a single bulk query with `select_related('movie_detail', 'series_detail', 'manga_detail', 'game_detail')` and `prefetch_related('genres', 'tags')`. Cross-media relationship checks reuse prefetched tags in memory without issuing repeated SQL queries.
+5. **Evidence Threshold**: Weak coincidental overlaps (such as sharing a single broad genre) fall below `min_evidence_score=15.0` and are pruned to prevent noisy suggestions.
+6. **Explainable Match Reasons**: Every returned item includes transparent, human-readable match explanations supported strictly by actual catalog overlaps.
+7. **Deterministic Tie-Breaking**: Ranks are sorted by `(-total_score, -shared_tags_count, -shared_genres_count, -release_year, title.lower(), str(id))`, ensuring identical output for identical database states.
+8. **Safe Franchise vs Thematic Distinction**: Generic thematic tags (*Cyberpunk*, *Dark Fantasy*, *Dystopian*) are treated strictly as thematic vibe similarity, while explicit verified identifiers (`franchise-*`, `universe-*`, specific IP universe tags) or verified cross-medium creator overlap represent franchise links.

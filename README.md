@@ -43,7 +43,7 @@ DreamTeal eliminates the limitations of fragmented single-medium apps by consoli
 
 ## 🚀 Implemented vs Planned Features
 
-### ✅ Implemented Features (Phase 0, Phase 1 & Phase 2 Complete)
+### ✅ Implemented Features (Phase 0, Phase 1, Phase 2 & Phase 3 Complete)
 - **Universal Catalog Data Model**: Base `MediaItem` with category-specific extension models (`MovieDetail`, `SeriesDetail`, `MangaDetail`, `GameDetail`), `Genre`, and `Tag`.
 - **Qualitative Reaction System**: Universal 5-badge taxonomy with zero-star guarantees enforced at database, serializer, and view layers.
 - **User Tracking State**: `UserMediaStatus` with strict lifecycle validation per media type.
@@ -53,11 +53,11 @@ DreamTeal eliminates the limitations of fragmented single-medium apps by consoli
 - **External Metadata Adapters**: TMDB, AniList, Jikan, and RAWG adapters with isolated mock testing.
 - **Multi-Mode Discovery & Balanced Search**: Popular, latest, trending, and upcoming discovery feeds, alongside balanced multi-category round-robin search.
 - **Session Authentication & CSRF Protection**: Django session authentication with CSRF enforcement on unsafe requests.
-- **Automated Verification**: Comprehensive offline test suite (88/88 passing tests).
+- **Deterministic Recommendation Engine**: In-house rule-based "What to watch/read/play next" recommendation engine (`GET /api/v1/recommendations/next/<slug>/`) with tag/genre Jaccard similarity, franchise adapter detection, user reaction affinity, strict evidence thresholds, transparent match explanations, and owner-scoped privacy boundaries.
+- **Automated Verification**: Comprehensive offline test suite (132/132 passing tests).
 
 ### ⏳ Planned Features (Upcoming Milestones)
-- **Phase 3 (Recommendation Engine)**: In-house deterministic "What to consume next" recommendation engine with cross-category thematic vibe/tag scoring.
-- **Phase 4 (Frontend)**: Modern React + Vite web client with dark mode aesthetics, glassmorphism, micro-animations, and custom design tokens (no TailwindCSS).
+- **Phase 4 (Frontend Foundation & Component Library)**: Modern React + Vite web client with dark mode aesthetics, glassmorphism, micro-animations, and custom design tokens (no TailwindCSS).
 
 ---
 
@@ -134,7 +134,7 @@ python manage.py test
 ```
 - **100% Offline**: All external provider communications (TMDB, AniList, Jikan, RAWG) are mocked using deterministic `unittest.mock` fixtures.
 - Covers data models, category-specific extensions, auto-sync, non-reversal rules, deduplication, search interleaving, query validation, CSRF enforcement, and zero-star audits.
-- Current Status: **88/88 tests passing cleanly in ~71s**.
+- Current Status: **132/132 tests passing cleanly in ~146s**.
 
 ### 2. Optional Live Provider Connectivity Check
 ```bash

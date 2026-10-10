@@ -52,8 +52,15 @@ Logging a diary entry automatically advances current progress forward. Historica
 ### 4. Django Session Authentication & CSRF Architecture [APPROVED]
 Uses Django Session Authentication with CSRF protection for secure communication with the React frontend, supporting both same-origin production and local Vite development proxy.
 
-### 5. In-House Recommendation Engine
-Answers *"What should I watch/read/play next?"* directly on the platform using a deterministic architecture (genres, vibes/tags, user history, and cross-category media relationships). Scoring formulas and weights are provisional.
+### 5. In-House Deterministic Recommendation Engine [APPROVED]
+Answers *"What should I watch/read/play next?"* directly on the platform via `GET /api/v1/recommendations/next/<slug>/` using a 100% offline, explainable, rule-based algorithm:
+- Normalized Jaccard similarity for Tags (weight: 40.0) and Genres (weight: 30.0).
+- Cross-media franchise adapter detection (weight: 15.0).
+- User reaction affinity bonus/penalty (weight: 15.0 for Peak, Loved It, Good Time; penalty for Not My Thing).
+- Minimum evidence threshold (`min_evidence_score=15.0`) eliminating weak coincidental matches.
+- Transparent, data-backed human-readable match explanations.
+- Strict owner-scoped personalization: excludes consumed/dropped/paused/skip media while preserving backlog candidates, with zero leakage of private user data.
+- Deterministic tie-breaking ordering (`-total_score`, `-shared_tags`, `-shared_genres`, `-release_year`, `title.lower()`, `str(id)`).
 
 ### 6. Code Quality & Readability
 All backend Django apps and React components include clear inline comments explaining what each module does, field definitions, business logic, and API data flow for developer readability.

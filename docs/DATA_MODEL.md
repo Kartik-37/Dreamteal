@@ -263,5 +263,33 @@ To guarantee user data immutability and predictable catalog synchronization, Dre
    - **Deletion**: When a synced session log is deleted, its synced hours are deducted from `GameProgress.hours_played` (floored at 0.0).
    - **Sync Suppression (`sync_progress=False`)**: When a log is saved with `sync_progress=False`, hours are recorded as unsynced (`_synced_hours = '0.0'`) and do not alter `GameProgress` on creation, update, or deletion.
 
+---
 
+## 8. Recommendation Engine Data Architecture [APPROVED]
 
+### 8.1 Zero Schema Additions
+Phase 3 introduces **no new database models, tables, or schema migrations**. The engine operates entirely on top of the established canonical schema:
+- **Catalog Metadata**: `MediaItem`, `Genre`, `Tag`, `MovieDetail`, `SeriesDetail`, `MangaDetail`, `GameDetail`.
+- **User Engagement & Tracking**: `UserMediaStatus`, `DiaryLog`.
+- **User Qualitative Reviews**: `MediaReview`, `ReactionDefinition`.
+- **Cross-Provider Mappings**: `ExternalMediaMapping` (deduplication & candidate canonicalization).
+
+### 8.2 In-Memory Scored Result Dataclass
+The recommendation engine uses an internal, typed dataclass to compute deterministic scores before passing results to the presentation/serializer layer:
+
+```python
+@dataclass
+class ScoredRecommendation:
+    candidate: MediaItem
+    total_score: float
+    tag_score: float
+    genre_score: float
+    cross_media_score: float
+    affinity_score: float
+    match_reasons: list[str]
+    shared_tags: list[str]
+    shared_genres: list[str]
+    is_franchise_linked: bool
+```
+
+This guarantees complete isolation between internal similarity computation and external JSON representation, ensuring no internal scores or floating-point weights are exposed to clients by default.
