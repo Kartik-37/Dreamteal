@@ -146,7 +146,7 @@ export function MediaPosterCard({
           <span>{releaseYear || '—'}</span>
           {media.genres && media.genres.length > 0 && (
             <span className="truncate max-w-[120px] text-text-muted text-[11px]">
-              {media.genres[0]}
+              {typeof media.genres[0] === 'object' ? media.genres[0].name : media.genres[0]}
             </span>
           )}
         </div>

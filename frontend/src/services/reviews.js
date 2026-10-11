@@ -15,6 +15,23 @@ export const reviewService = {
   },
 
   /**
+   * Fetch reviews list with optional filters (e.g. { media: mediaId }).
+   */
+  async getReviews(params = {}) {
+    return apiClient('/api/v1/reviews/', {
+      method: 'GET',
+      params,
+    });
+  },
+
+  /**
+   * List reviews for a specific media item.
+   */
+  async getMediaReviews(mediaId) {
+    return this.getReviews({ media: mediaId });
+  },
+
+  /**
    * Create a qualitative review with reaction verdict.
    */
   async createReview(reviewData) {
@@ -49,16 +66,6 @@ export const reviewService = {
   async deleteReview(reviewId) {
     return apiClient(`/api/v1/reviews/${encodeURIComponent(reviewId)}/`, {
       method: 'DELETE',
-    });
-  },
-
-  /**
-   * List reviews for a specific media item.
-   */
-  async getMediaReviews(mediaId) {
-    return apiClient('/api/v1/reviews/', {
-      method: 'GET',
-      params: { media: mediaId },
     });
   },
 };
