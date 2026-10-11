@@ -69,12 +69,16 @@ export function Navbar() {
           <div className="hidden md:flex items-center gap-3">
             {isAuthenticated ? (
               <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-2 border border-border-neutral text-xs">
+                <Link
+                  to="/profile"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-2 border border-border-neutral hover:border-teal/50 hover:bg-surface-3 transition-colors text-xs"
+                  title="View Profile"
+                >
                   <User className="w-3.5 h-3.5 text-teal" />
                   <span className="font-medium text-text-primary">
                     {user?.display_name || user?.username}
                   </span>
-                </div>
+                </Link>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -141,10 +145,14 @@ export function Navbar() {
             <div className="pt-3 border-t border-border-neutral/60">
               {isAuthenticated ? (
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs text-text-primary">
+                  <Link
+                    to="/profile"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-2 text-xs text-text-primary hover:text-teal"
+                  >
                     <User className="w-4 h-4 text-teal" />
                     <span>{user?.display_name || user?.username}</span>
-                  </div>
+                  </Link>
                   <Button
                     variant="ghost"
                     size="sm"

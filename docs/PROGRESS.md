@@ -1,15 +1,14 @@
 # DreamTeal Project Progress Tracker
 
-## Current Status: Phase 4 INTEGRATED INTO DEVELOP & VERIFIED | Ready for Phase 5
+## Current Status: Phase 5 COMPLETED & VERIFIED | Ready for Phase 6
 
 **Git Milestone Baseline**:
-- **Integration Commit SHA**: `7e52828b6d4fe71ba61c71f54be60589a1945100` (merge of `feature/frontend-foundation` into `develop`)
-- **Frontend Baseline Commit SHA**: `424e60ea5d1828fd7ae873068771baa3406268aa`
-- **Backend Baseline Commit SHA**: `8c31582e054d4620747067a3f159248249d40ab4`
+- **Working Feature Branch**: `feature/core-pages-interactive-ux` (to be merged into `develop`)
 - **Integration Branch**: `develop`
 - **Main Branch**: `main` (protected stable branch)
-- **Frontend Verification**: 22/22 Vitest tests passing across 5 test files; `npm run build` passing in 5.68s with zero warnings
-- **Backend Verification**: 132/132 automated tests passing cleanly in ~170s (100% offline, deterministic)
+- **Frontend Verification**: 30/30 Vitest tests passing across 6 test files; `npm run build` passing in ~6.5s with zero errors or warnings
+- **Backend Verification**: 132/132 automated tests passing cleanly (100% offline, deterministic)
+- **Visual & Browser Verification**: Executed live workflow walkthrough via `browser_subagent` verifying Discovery Hub, Media Detail, Diary, Collections, and Profile pages.
 
 ---
 
@@ -161,11 +160,50 @@
   - Django test suite passing 132/132 tests offline and deterministic.
 
 ---
+ 
+### Phase 5: Core Pages & Interactive UX (COMPLETED & VERIFIED)
+- [x] 1. Discovery Hub (`DiscoveryPage.jsx` at `/`, `/discovery`):
+  - Multi-category tab navigation (All Media, Movies, TV Series, Manga, Manhwa, Video Games).
+  - Debounced search (350ms) with request cancellation against race conditions (`GET /api/v1/media/search/?q=...`).
+  - Provider discovery feeds (Popular, Trending, Latest Releases, Upcoming) via `GET /api/v1/discovery/<category>/?mode=...`.
+  - Local catalog browsing with ordering controls (`-release_year`, `release_year`, `title`, `-created_at`) and pagination / load more support.
+  - On-demand provider import integration (`POST /api/v1/media/import/`) with seamless redirection upon candidate selection.
+- [x] 2. Media Detail Page (`MediaDetailPage.jsx` at `/media/:slug`):
+  - Editorial hero backdrop with high-contrast gradient scrim and responsive poster card layout.
+  - Comprehensive category extensions (Movie director/runtime/studio/OTT, TV creators/seasons/episodes, Manga author/artist/type/status/chapters, Game developer/publisher/platforms/story hours).
+  - Active user tracking indicators and quick tracking / review / diary action triggers.
+  - Deterministic "What to consume next" recommendation carousel (`GET /api/v1/recommendations/next/<slug>/`) with explainable match reasons.
+  - Community qualitative reviews list with safe Markdown formatting, spoiler masking, and authenticated review editing.
+- [x] 3. Tracking & Progress Modals (`TrackingModal.jsx`):
+  - Category-aware tracking modal supporting polymorphic status mutation (`POST /api/v1/tracking/status/` or `PATCH /api/v1/tracking/status/<id>/`).
+  - Progress counters for Series (season/episode), Manga (chapter/volume), and Video Games (cumulative hours, platform, completion tier).
+  - Favorite toggling and deletion support.
+- [x] 4. History-Preserving Diary (`DiaryPage.jsx`, `DiaryModal.jsx` at `/diary`):
+  - Chronological consumption timeline grouped by year and month.
+  - Session logging modal supporting date picker, rewatch/re-read/replay toggle, session notes, and category-specific progress snapshots.
+  - Forward-progress synchronization checkbox with non-reversing safeguards.
+  - Additive game playtime tracking via `GameSessionTrackingService` with zero double-counting on the frontend.
+- [x] 5. Qualitative Reviews & Reactions (`ReviewModal.jsx`, `SafeMarkdown.jsx`):
+  - Authoring modal for the 5 approved qualitative reaction verdicts (Peak, Loved It, Good Time, Not My Thing, Skip) with zero star ratings.
+  - XSS-safe Markdown renderer (`SafeMarkdown.jsx`) escaping raw HTML entities while supporting formatting tokens.
+  - Spoiler mask flag and public vs private review visibility toggles.
+- [x] 6. User Profile Page (`ProfilePage.jsx` at `/profile`):
+  - Authenticated user profile overview with bio editing (`PATCH /api/v1/users/me/`).
+  - Qualitative reaction breakdown tally across authored reviews (purely non-numeric).
+  - Tracking status counts and recent diary activity feed.
+- [x] 7. Collections Architectural Documentation (`CollectionsPage.jsx` at `/collections`):
+  - Transparent architectural notice documenting Phase 6 backend extension requirements (`apps/collections/`).
+  - Adheres strictly to project governance: does not simulate persistence using browser `localStorage` or unverified mock state.
+- [x] 8. Automated Verification:
+  - 30/30 Vitest tests passing across 6 test suites.
+  - Production build bundle passing cleanly with zero warnings (`npm run build`).
+  - Django system check passing with 0 issues (`python manage.py check`).
+  - Django test suite passing 132/132 tests offline and deterministic (`python manage.py test`).
 
-### Next Phase: Phase 5 (Core Pages & Interactive UX)
-- Build Discovery Hub with category feeds and filter drawers.
-- Build Media Detail Page with backdrop hero, reaction verdicts, and "What to consume next" recommendation carousel.
-- Build Modal Logging Interface for quick status updates, chapter/episode tracking, hours played, and diary logs.
-- Build Letterboxd-style Diary / History timeline view grouped by month/year.
-- Build User Profile & Collections pages.
+---
+
+### Next Phase: Phase 6 (Collections & Advanced Polish)
+- Implement backend `apps/collections/` with `MediaCollection` and `CollectionItem` models.
+- Build Collections CRUD REST endpoints and integrate with `CollectionsPage.jsx`.
+- End-to-end polish and performance optimization.
 

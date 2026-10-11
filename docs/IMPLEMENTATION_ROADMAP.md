@@ -126,12 +126,14 @@ Implement backend data foundations in strict verified order:
 
 ---
 
-### Phase 5: Core Pages & Interactive UX
-- [ ] Build Home & Explore / Discovery Hub with category tabs & vibe filters.
-- [ ] Build Media Detail Page with hero backdrop, metadata, reaction reviews, and "What to consume next" recommendation carousel.
-- [ ] Build Modal Logging Interface for quick status updates, chapter tracking, hours played, and diary logs.
-- [ ] Build Letterboxd-style Diary / History view grouped by month/date.
-- [ ] Build User Profile & Collections pages.
+### Phase 5: Core Pages & Interactive UX (COMPLETED & VERIFIED)
+- [x] Build Home & Explore / Discovery Hub with category tabs (All, Movies, TV, Manga, Manhwa, Games), debounced search with cancellation, local catalog sorting, and provider-backed discovery feeds (Popular, Trending, Latest, Upcoming).
+- [x] Build Media Detail Page with hero backdrop, responsive metadata, category extensions, tracking status indicators, community reviews with safe Markdown and spoiler reveal, and "What to consume next" recommendation carousel.
+- [x] Build Modal Tracking Interface (`TrackingModal.jsx`) for polymorphic status updates, chapter & volume tracking, episode counters, hours played, and favorite toggling.
+- [x] Build Letterboxd-style Diary / History view (`DiaryPage.jsx`, `DiaryModal.jsx`) grouped by month and year, supporting date editing, rewatch toggles, progress snapshots, and forward-progress synchronization.
+- [x] Build User Profile (`ProfilePage.jsx`) with bio editing, qualitative reaction breakdown stats, tracking summary, and recent diary activity.
+- [x] Document Collections Architecture (`CollectionsPage.jsx`) detailing Phase 6 requirements for `apps/collections/` without simulating persistence using browser localStorage.
+- [x] Automated Verification: 30/30 Vitest tests passing, `npm run build` passing cleanly, `python manage.py check` passing with 0 issues, and 132/132 Django backend tests passing offline.
 
 ---
 

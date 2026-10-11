@@ -2,6 +2,50 @@
 
 All notable changes to the DreamTeal project specifications and codebase will be documented in this file.
 
+## [0.7.0-alpha] - 2026-10-11
+### Added (Phase 5 Core Pages & Interactive UX)
+- **Discovery Hub (`DiscoveryPage.jsx` at `/`, `/discovery`, `/recommendations`)**:
+  - Implemented multi-category tabs: All Media, Movies (`MOVIE`), TV Series (`SERIES`), Manga (`MANGA`), Manhwa (`MANHWA`), Video Games (`GAME`).
+  - Integrated provider-backed discovery feeds (Popular, Trending, New Releases, Upcoming) via `GET /api/v1/discovery/<category>/?mode=...`.
+  - Integrated live debounced catalog search (350ms) with request cancellation and stale response protection via `GET /api/v1/media/search/?q=...`.
+  - Added on-demand provider import integration: clicking unimported provider search candidates invokes `POST /api/v1/media/import/` and redirects seamlessly to the created media item.
+  - Implemented local catalog browsing with ordering controls (`-release_year`, `release_year`, `title`, `-created_at`) and pagination / load more support.
+- **Media Detail Page (`MediaDetailPage.jsx` at `/media/:slug`)**:
+  - High-impact editorial hero backdrop with high-contrast gradient scrim and responsive poster placement.
+  - Category-specific polymorphic metadata extensions: Director, Runtime, Studio, OTT streaming providers for Movies; Creators, Seasons, Episodes, OTT providers for TV; Author, Artist, Type, Status, Chapters for Manga; Developer, Publisher, Platforms, Story Hours for Video Games.
+  - Verified third-party provider attribution links (`external_mappings`).
+  - Real-time authenticated user tracking status badges and active progress indicators (e.g. current season/episode or accumulated playtime).
+  - Integrated "What to consume next" recommendation carousel powered by `GET /api/v1/recommendations/next/<slug>/` with explainable match reasons.
+  - Community qualitative reviews list with safe Markdown formatting, user ownership actions, and spoiler mask with explicit click-to-reveal interaction.
+- **Tracking & Progress Modal (`TrackingModal.jsx`)**:
+  - Category-aware tracking modal supporting polymorphic status mutation (`POST /api/v1/tracking/status/` or `PATCH /api/v1/tracking/status/<id>/`).
+  - Category-specific progress counters: TV season & episode, Manga chapter & volume, Video game cumulative hours played, platform, and completion tier (`apps.tracking`).
+  - Favorite toggle and deletion workflow with optimistic feedback and backend error handling.
+- **History-Preserving Diary (`DiaryPage.jsx`, `DiaryModal.jsx` at `/diary`)**:
+  - Chronological consumption timeline grouped by year and month.
+  - Session logging modal supporting date picker, rewatch/re-read/replay toggle, session notes, and category-specific progress snapshots (episodes, chapters, session hours).
+  - Additive game session playtime tracking powered by `GameSessionTrackingService` with zero double-counting on the frontend.
+  - Forward-progress synchronization checkbox with non-reversing safeguards.
+  - Full CRUD support (Create, Edit, Delete) for individual historical diary records via `/api/v1/tracking/logs/`.
+- **Qualitative Reviews & Reactions (`ReviewModal.jsx`, `SafeMarkdown.jsx`)**:
+  - Authoring modal for the 5 approved qualitative reaction verdicts: Peak, Loved It, Good Time, Not My Thing, Skip (strictly non-numeric, zero star ratings).
+  - XSS-safe Markdown text renderer (`SafeMarkdown.jsx`) escaping raw HTML entities while supporting bold, italic, inline code, quotes, and lists.
+  - Spoiler mask flag and public vs private review visibility toggles.
+- **User Profile Page (`ProfilePage.jsx` at `/profile`)**:
+  - Authenticated user profile overview with bio editing (`PATCH /api/v1/users/me/`).
+  - Distribution breakdown of user qualitative reaction verdicts across authored reviews.
+  - Tracking status counts and recent diary activity feed.
+- **Collections Architecture Overview (`CollectionsPage.jsx` at `/collections`)**:
+  - Transparent architectural notice documenting Phase 6 backend extension requirements (`apps/collections/`).
+  - Adheres strictly to project governance: does not simulate persistence using browser `localStorage` or unverified mock state.
+- **Session Authentication & Routing (`LoginPage.jsx`, `router.jsx`, `Navbar.jsx`)**:
+  - Session login screen with CSRF cookie prefetching.
+  - Complete routing tree linking all core workflows with accessible navigation.
+- **Automated Verification**:
+  - Expanded frontend Vitest test suite to **30 tests** across 6 test suites, passing 100%.
+  - Verified production bundle compilation (`npm run build`) passing with zero warnings in 6.53s.
+  - Verified Django backend test suite passing **132/132 tests** offline and deterministic.
+
 ## [0.6.0-alpha] - 2026-10-10
 ### Added (Phase 4 Frontend Foundation & Component Library)
 - **React + Vite Frontend Architecture**: Established modern frontend under `frontend/` powered by React 18, Vite 5, Tailwind CSS 3, and React Router 6. Configured development proxy (`/api` -> `http://127.0.0.1:8000`) and documented `.env.example`.

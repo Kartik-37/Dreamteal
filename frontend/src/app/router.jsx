@@ -1,27 +1,15 @@
 import React from 'react';
 import { createBrowserRouter, Link } from 'react-router-dom';
 import { AppLayout } from '../components/layout/AppLayout';
+import { DiscoveryPage } from '../features/catalog/DiscoveryPage';
+import { MediaDetailPage } from '../features/catalog/MediaDetailPage';
+import { DiaryPage } from '../features/diary/DiaryPage';
+import { CollectionsPage } from '../features/collections/CollectionsPage';
+import { ProfilePage } from '../features/profile/ProfilePage';
+import { LoginPage } from '../features/auth/LoginPage';
 import { FoundationDemoPage } from '../features/catalog/FoundationDemoPage';
 import { EmptyState } from '../components/feedback/EmptyState';
 import { Button } from '../components/ui/Button';
-
-function PhasePlaceholder({ title, description }) {
-  return (
-    <div className="max-w-4xl mx-auto px-4 py-20 w-full">
-      <EmptyState
-        title={title}
-        description={description}
-        action={
-          <Link to="/">
-            <Button variant="secondary" size="sm">
-              Return to Explore Foundation
-            </Button>
-          </Link>
-        }
-      />
-    </div>
-  );
-}
 
 export const router = createBrowserRouter([
   {
@@ -30,34 +18,39 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <FoundationDemoPage />,
+        element: <DiscoveryPage />,
+      },
+      {
+        path: 'discovery',
+        element: <DiscoveryPage />,
+      },
+      {
+        path: 'media/:slug',
+        element: <MediaDetailPage />,
       },
       {
         path: 'diary',
-        element: (
-          <PhasePlaceholder
-            title="Diary & History Timeline"
-            description="Chronological media logging with session snapshots and rewatch tracking is scheduled for Phase 5 implementation."
-          />
-        ),
+        element: <DiaryPage />,
       },
       {
         path: 'collections',
-        element: (
-          <PhasePlaceholder
-            title="Curated Collections"
-            description="Custom media lists, favorites, and cross-category collections are scheduled for Phase 5 implementation."
-          />
-        ),
+        element: <CollectionsPage />,
+      },
+      {
+        path: 'profile',
+        element: <ProfilePage />,
+      },
+      {
+        path: 'login',
+        element: <LoginPage />,
+      },
+      {
+        path: 'demo',
+        element: <FoundationDemoPage />,
       },
       {
         path: 'recommendations',
-        element: (
-          <PhasePlaceholder
-            title="Recommendation Hub"
-            description="Deterministic explainable discovery powered by DreamTeal's recommendation engine is scheduled for Phase 5 implementation."
-          />
-        ),
+        element: <DiscoveryPage />,
       },
       {
         path: '*',
