@@ -83,3 +83,39 @@ DreamTeal's design is **dark, poster-focused, functional, and compact**. It take
 - ❌ NO Overused glassmorphism / full-page backdrop blurs.
 - ❌ NO Bright purple neon glow borders or arbitrary gradients.
 - ❌ NO Empty dashboard panels or fluff statistics.
+
+---
+
+## 4. Implemented Reusable Component Library (Phase 4) [APPROVED & VERIFIED]
+
+The DreamTeal frontend foundation implements an intentional, dark cinematic component library under `frontend/src/components/`:
+
+### 4.1 Layout & Navigation
+- **`AppLayout`** (`components/layout/AppLayout.jsx`): Persistent responsive shell wrapping `Navbar`, dynamic page `Outlet`, and `Footer`.
+- **`Navbar`** (`components/navigation/Navbar.jsx`): Brand logo with teal mark, desktop navigation links (`Explore`, `Diary`, `Collections`, `Recommendations`), responsive mobile slide-out drawer, active route indicators, and Session Authentication entry.
+- **`Footer`** (`components/navigation/Footer.jsx`): Editorial philosophy ("Zero star ratings. 100% qualitative reactions"), universal reactions palette summary, external provider attribution notices, and copyright.
+
+### 4.2 Media Presentation
+- **`MediaPosterCard`** (`components/media/MediaPosterCard.jsx`): Aspect-ratio aware (`2:3` for Movies, Series, Manga; `16:9` for Video Games). Gracefully handles missing/broken imagery without layout shifts, overlays category labels and tracking statuses, and renders text-based reaction verdict badge. Zero star ratings.
+- **`MediaPosterGrid`** (`components/media/MediaPosterGrid.jsx`): Responsive column grid (2 mobile, 3–4 tablet, 5–6 desktop), skeleton state, and empty state support.
+- **`MediaBackdrop`** (`components/media/MediaBackdrop.jsx`): Cinematic backdrop hero presentation with high-contrast gradient scrim layers ensuring text readability.
+- **`MediaMetadata`** (`components/media/MediaMetadata.jsx`): Editorial metadata row/panel (category label, release year, genres, theme tags).
+- **`MediaCategoryLabel`** (`components/media/MediaCategoryLabel.jsx`): Distinct pill label for Movie, Series, Manga, Manhwa, and Game.
+- **`MediaSkeleton`** (`components/media/MediaSkeleton.jsx`): Matching geometry pulse placeholder for poster cards.
+
+### 4.3 Reactions & Tracking
+- **`ReactionBadge`** (`components/reactions/ReactionBadge.jsx`): Strictly non-numeric qualitative reaction pill. Always renders text label. Approved tokens: Peak (Electric Gold `#f59e0b`), Loved It (Warm Coral `#fb7185`), Good Time (Radiant Teal `#14b8a6`), Not My Thing (Muted Lavender `#a78bfa`), Skip (Crimson `#e11d48`).
+- **`ReactionSelector`** (`components/reactions/ReactionSelector.jsx`): Accessible, keyboard-navigable radio group for selecting qualitative verdicts without stars or emojis. Controlled component.
+- **`MediaStatusBadge`** (`components/status/MediaStatusBadge.jsx`): Displays lifecycle states (`In Progress`, `Completed`, `Plan to Experience`, `On Hold`, `Dropped`).
+- **`ProgressIndicator`** (`components/status/ProgressIndicator.jsx`): Category-specific indicators (Series: `S2 E5`, Manga: `Ch. 142`, Game: `34.5 hrs • Main Story`) with optional smooth teal progress bar.
+
+### 4.4 Feedback & Feedback Primitives
+- **`LoadingSpinner`** (`components/feedback/LoadingSpinner.jsx`): Brand teal accented accessible spinner.
+- **`Skeleton`** (`components/feedback/Skeleton.jsx`): Dark surface elevation pulse placeholder.
+- **`EmptyState`** (`components/feedback/EmptyState.jsx`): Editorial empty state with icon, headline, description, and optional action button.
+- **`ErrorMessage`** (`components/feedback/ErrorMessage.jsx`): Inline and panel error feedback with optional retry callback.
+
+### 4.5 UI Primitives & Authentication
+- **`Button`** (`components/ui/Button.jsx`): Primary (teal glow), Secondary (surface-2), Ghost, and Danger variants with loading spinners and focus rings.
+- **`Modal`** (`components/ui/Modal.jsx`): Accessible dialog with backdrop blur, focus trap, and Escape key listener.
+- **`AuthModal`** (`components/forms/AuthModal.jsx`): Django Session Authentication login dialog with CSRF protection and error reporting.

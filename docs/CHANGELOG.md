@@ -2,6 +2,33 @@
 
 All notable changes to the DreamTeal project specifications and codebase will be documented in this file.
 
+## [0.6.0-alpha] - 2026-10-10
+### Added (Phase 4 Frontend Foundation & Component Library)
+- **React + Vite Frontend Architecture**: Established modern frontend under `frontend/` powered by React 18, Vite 5, Tailwind CSS 3, and React Router 6. Configured development proxy (`/api` -> `http://127.0.0.1:8000`) and documented `.env.example`.
+- **UI Design System Tokens & Global Styling**:
+  - Defined CSS variables in `tokens.css` and mapped into Tailwind: pitch slate dark surfaces (`#0b0c10`, `#121318`, `#1a1c23`, `#222530`), crisp off-white text (`#f1f3f9`), muted labels (`#9498a8`), and brand teal accents (`#14b8a6`, `#0d9488`).
+  - Approved qualitative reaction design tokens: Peak (Electric Gold `#f59e0b`), Loved It (Warm Coral `#fb7185`), Good Time (Radiant Teal `#14b8a6`), Not My Thing (Muted Lavender `#a78bfa`), Skip (Crimson `#e11d48`).
+  - Media aspect ratios (`aspect-poster` 2:3, `aspect-game` 16:9).
+  - Reduced motion media query handling and custom focus rings for accessibility.
+- **Reusable Component Library**:
+  - Application Shell: `Navbar` (desktop & responsive mobile menu, active route indicators, session auth entry), `Footer` (brand philosophy and reaction palette summary), `AppLayout`.
+  - Media Presentation: `MediaPosterCard` (with image fallback handling and shimmer placeholder), `MediaPosterGrid` (responsive 2-to-6 column layouts), `MediaBackdrop` (cinematic banner with high-contrast gradient scrim), `MediaMetadata`, `MediaCategoryLabel`, `MediaSkeleton`.
+  - Reactions & Tracking: `ReactionBadge` (strictly non-numeric qualitative reaction pill), `ReactionSelector` (controlled, accessible radio group without stars or emojis), `MediaStatusBadge`, `ProgressIndicator` (category-specific counts + smooth progress bar).
+  - Feedback: `LoadingSpinner`, `Skeleton`, `EmptyState`, `ErrorMessage` (with retry action).
+  - UI Primitives: `Button` (primary/secondary/ghost/danger), `Modal` (accessible dialog with escape listener), `AuthModal` (session login dialog).
+- **Centralized API Client & Service Layer**:
+  - Built `src/services/api.js` supporting `credentials: 'include'` for Django session cookies, automatic CSRF prefetching (`/api/v1/users/csrf/`) and header attachment (`X-CSRFToken`) for unsafe methods (`POST`, `PUT`, `PATCH`, `DELETE`), and normalized `ApiError` hierarchy.
+  - Built feature service modules: `authService`, `catalogService`, `trackingService`, `reviewService`, `recommendationService`.
+  - Built `AuthProvider` & `useAuth` hook managing Django session authentication without client-side token spoofing or storing credentials in localStorage.
+- **Foundation Demonstration Screen**:
+  - Created `FoundationDemoPage.jsx` at route `/` demonstrating application shell, category filters, local fixtures vs. live API toggle, interactive reaction selector, state simulations (loading, empty, error), and media inspection modal.
+- **Automated Verification**:
+  - Implemented 22 Vitest unit and component tests across 5 test suites (`components.test.js`, `constants.test.js`, `apiClient.test.js`, `services.test.js`, `app.test.jsx`).
+  - Verified `npm run build` production compilation passing with zero warnings or errors.
+  - Verified Django backend test suite passing 132/132 tests offline and deterministic.
+
+---
+
 ## [0.5.1-alpha] - 2026-10-10
 ### Changed & Fixed (Phase 3 Recommendation Engine Audit & Correction Pass)
 - **Corrected `Not My Thing` Negative Preference Modeling**: Upgraded `RecommendationEngine._get_user_preferences` to extract `disliked_genres` and `disliked_tags` from works reviewed with `Not My Thing`. Candidates sharing those attributes receive a negative preference penalty, while unrelated candidates sharing none of the disliked attributes receive zero penalty. Disliking one title in a franchise does not conflate with disliking the franchise or strip franchise relationship points from other works.

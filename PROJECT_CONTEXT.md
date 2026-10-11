@@ -75,3 +75,9 @@ All backend Django apps and React components include clear inline comments expla
 - Game diary sessions are the transactional source of truth for playtime. `GameProgress.hours_played` is maintained consistently across session creation, edit (delta calculation), deletion (deducting synced hours), and is unaffected when `sync_progress=False`.
 - Private reviews (`is_public=False`) are visible only to their owner (`404 Not Found` for anonymous and non-owning authenticated users).
 
+### 9. Frontend Foundation & Component Library [APPROVED]
+- Technology: React, Vite, Tailwind CSS, React Router, centralized API client.
+- Zero Star Ratings: Completely star-free and score-free across all components, badges, utilities, and tests.
+- Reusable Component Library: Application shell (`Navbar`, `Footer`, `AppLayout`), Media presentation (`MediaPosterCard`, `MediaPosterGrid`, `MediaBackdrop`, `MediaMetadata`, `MediaCategoryLabel`, `MediaSkeleton`), Qualitative Reactions (`ReactionBadge`, `ReactionSelector`), Tracking (`MediaStatusBadge`, `ProgressIndicator`), Feedback (`EmptyState`, `ErrorMessage`, `LoadingSpinner`, `Skeleton`), UI primitives (`Button`, `Modal`).
+- Django Session Auth & CSRF: Pre-fetches CSRF cookie via `/api/v1/users/csrf/`, automatically attaches `X-CSRFToken` to unsafe requests (`POST`, `PUT`, `PATCH`, `DELETE`), preserves session authentication over HTTP-only cookies without storing credentials.
+

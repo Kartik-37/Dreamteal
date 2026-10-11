@@ -1,0 +1,65 @@
+@import './tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    border-color: var(--color-border-neutral);
+  }
+
+  body {
+    background-color: var(--color-bg-deep);
+    color: var(--color-text-primary);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Outfit', 'Inter', -apple-system, sans-serif;
+    color: var(--color-text-primary);
+    letter-spacing: -0.02em;
+  }
+}
+
+@layer utilities {
+  /* Subtle border treatment */
+  .border-divider {
+    border-color: var(--color-border-neutral);
+  }
+
+  /* Custom focus indicator for keyboard accessibility */
+  .focus-ring {
+    outline: none;
+  }
+  .focus-ring:focus-visible {
+    outline: 2px solid var(--color-teal);
+    outline-offset: 2px;
+  }
+
+  /* Smooth poster transition */
+  .poster-card-transition {
+    transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+  }
+  .poster-card-transition:hover {
+    transform: translateY(-4px);
+  }
+
+  /* Custom subtle scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0b0c10;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #272932;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3b3e4c;
+  }
+}
